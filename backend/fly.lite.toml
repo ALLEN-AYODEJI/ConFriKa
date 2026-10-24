@@ -18,10 +18,11 @@ primary_region = "jnb"   # Johannesburg — closest Fly region to most of Africa
 
 [env]
   APP_ENV = "production"
-  # Managed-only translator (Google Cloud Translation): never loads torch/NLLB,
-  # so this fits a tiny machine. Needs the GOOGLE_TRANSLATE_API_KEY secret; with
-  # no key set it degrades to returning the source text unchanged.
-  TRANSLATION_PROVIDER = "google"
+  # Free managed translator (MyMemory): no key, no billing, never loads torch/NLLB
+  # so it fits a tiny machine. Free quota ~5k chars/day per IP (set MYMEMORY_EMAIL
+  # for ~50k). Degrades to returning the source text unchanged on any failure.
+  # Switch to "google" (needs GOOGLE_TRANSLATE_API_KEY) or "nllb" (fly.toml) later.
+  TRANSLATION_PROVIDER = "mymemory"
   TRANSLATION_WARMUP = "false"
   # SQLite + media live on the persistent volume mounted at /opt/confrika.
   DATABASE_URL = "sqlite+aiosqlite:////opt/confrika/confrika.db"

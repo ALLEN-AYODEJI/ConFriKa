@@ -20,6 +20,7 @@ from typing import Optional
 
 from ..config.settings import settings
 from . import google_translate_provider
+from . import mymemory_provider
 
 logger = logging.getLogger("confrika.translation")
 
@@ -422,6 +423,32 @@ async def _translate_via_google(text: str, src: _Language, tgt: _Language) -> En
     return EngineResult(text, src.flores, tgt.flores, 0.0, "passthrough")
 
 
+async def _translate_via_mymemory(text: str, src: _Language, tgt: _Language) -> EngineResult:
+    """Free MyMemory API as the primary engine (no key, no NLLB).
+
+    Used by the lightweight deploy (``TRANSLATION_PROVIDER=mymemory``). Reuses the
+    ISO codes from language resolution. On any failure (incl. exhausted free
+    quota or an unsupported pair) the source text is returned unchanged.
+    """
+    if src.google and tgt.google:
+        gp = mymemory_provider.get_provider()
+        try:
+            translated = await gp.translate(text, src.google, tgt.google)
+            return EngineResult(
+                translated_text=translated,
+                source_code=src.google,
+                target_code=tgt.google,
+                confidence=mymemory_provider.PROVIDER_CONFIDENCE,
+                model=gp.model_name,
+            )
+        except Exception as exc:
+            logger.warning(
+                "MyMemory failed (%s->%s), returning source unchanged: %s",
+                src.google, tgt.google, exc,
+            )
+    return EngineResult(text, src.flores, tgt.flores, 0.0, "passthrough")
+
+
 async def translate(text: str, source_label: str, target_label: str) -> EngineResult:
     """Translate ``text`` from ``source_label`` to ``target_label``.
 
@@ -453,6 +480,10 @@ async def translate(text: str, source_label: str, target_label: str) -> EngineRe
     if provider == "google":
         # Managed provider as the sole engine (lightweight deploy, no NLLB).
         return await _translate_via_google(stripped, src, tgt)
+
+    if provider == "mymemory":
+        # Free managed provider as the sole engine (no key, no NLLB).
+        return await _translate_via_mymemory(stripped, src, tgt)
 
     # --- Managed-provider route for languages NLLB-200 does not cover. ---
     nllb_lossy = (not src.nllb_native) or (not tgt.nllb_native)

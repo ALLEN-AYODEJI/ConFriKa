@@ -51,7 +51,8 @@ class Settings(BaseSettings):
         return bool(self.EMAIL_API_KEY and self.EMAIL_API_KEY.strip())
 
     # Translation engine
-    TRANSLATION_PROVIDER: str = "nllb"  # 'nllb' | 'google' | 'echo' (google = managed-only; echo = passthrough, dev only)
+    TRANSLATION_PROVIDER: str = "nllb"  # 'nllb' | 'google' | 'mymemory' | 'echo'
+    MYMEMORY_EMAIL: str = ""  # optional: raises MyMemory's free daily quota (~5k -> ~50k chars)
     NLLB_MODEL: str = "facebook/nllb-200-distilled-600M"
     NLLB_DEVICE: str = "cpu"  # 'cpu' | 'cuda'
     NLLB_MAX_INPUT_TOKENS: int = 512
