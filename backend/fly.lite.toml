@@ -18,8 +18,10 @@ primary_region = "jnb"   # Johannesburg — closest Fly region to most of Africa
 
 [env]
   APP_ENV = "production"
-  # Passthrough translator: never loads torch/NLLB, so this fits a tiny machine.
-  TRANSLATION_PROVIDER = "echo"
+  # Managed-only translator (Google Cloud Translation): never loads torch/NLLB,
+  # so this fits a tiny machine. Needs the GOOGLE_TRANSLATE_API_KEY secret; with
+  # no key set it degrades to returning the source text unchanged.
+  TRANSLATION_PROVIDER = "google"
   TRANSLATION_WARMUP = "false"
   # SQLite + media live on the persistent volume mounted at /opt/confrika.
   DATABASE_URL = "sqlite+aiosqlite:////opt/confrika/confrika.db"

@@ -385,6 +385,43 @@ async def warmup() -> None:
         logger.warning("Translation warmup failed (will retry on demand): %s", exc)
 
 
+async def _translate_via_google(text: str, src: _Language, tgt: _Language) -> EngineResult:
+    """Google Cloud Translation as the *primary* engine (no local NLLB).
+
+    Used by the lightweight deploy (``TRANSLATION_PROVIDER=google``) so real
+    translation works on a tiny machine with no model loaded. When Google is
+    unconfigured or does not cover the pair, the source text is returned
+    unchanged — there is no local model to fall back to in this mode.
+    """
+    if src.google and tgt.google and google_translate_provider.is_configured():
+        gp = google_translate_provider.get_provider()
+        try:
+            if await gp.supports(src.google, tgt.google):
+                translated = await gp.translate(text, src.google, tgt.google)
+                return EngineResult(
+                    translated_text=translated,
+                    source_code=src.google,
+                    target_code=tgt.google,
+                    confidence=google_translate_provider.PROVIDER_CONFIDENCE,
+                    model=gp.model_name,
+                )
+            logger.info(
+                "Google does not cover %s->%s; returning source unchanged",
+                src.google, tgt.google,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Google translate failed (%s->%s), returning source unchanged: %s",
+                src.google, tgt.google, exc,
+            )
+    elif not google_translate_provider.is_configured():
+        logger.warning(
+            "TRANSLATION_PROVIDER=google but GOOGLE_TRANSLATE_API_KEY is not set; "
+            "returning source unchanged"
+        )
+    return EngineResult(text, src.flores, tgt.flores, 0.0, "passthrough")
+
+
 async def translate(text: str, source_label: str, target_label: str) -> EngineResult:
     """Translate ``text`` from ``source_label`` to ``target_label``.
 
@@ -412,6 +449,10 @@ async def translate(text: str, source_label: str, target_label: str) -> EngineRe
     if provider == "echo":
         # Development-only passthrough. Never enabled in production.
         return EngineResult(stripped, src.flores, tgt.flores, 0.0, "echo")
+
+    if provider == "google":
+        # Managed provider as the sole engine (lightweight deploy, no NLLB).
+        return await _translate_via_google(stripped, src, tgt)
 
     # --- Managed-provider route for languages NLLB-200 does not cover. ---
     nllb_lossy = (not src.nllb_native) or (not tgt.nllb_native)
