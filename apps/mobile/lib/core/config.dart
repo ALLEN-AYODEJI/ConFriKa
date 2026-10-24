@@ -1,12 +1,15 @@
 /// App-wide configuration.
 ///
-/// The backend base URL defaults to the Android-emulator loopback alias
-/// (10.0.2.2 maps to the host machine's localhost). Override at build time:
-///   flutter run --dart-define=API_BASE_URL=https://api.confrika.com
+/// The backend base URL defaults to the live Fly.io backend. For local
+/// development against a backend on the host, override at build time with the
+/// Android-emulator loopback alias (10.0.2.2 maps to the host's localhost):
+///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8088
+/// Switch the default to https://api.confrika.online once that custom domain
+/// is pointed at the Fly app.
 class AppConfig {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8088',
+    defaultValue: 'https://confrika-backend.fly.dev',
   );
 
   /// WebSocket base derived from the API base URL (http->ws, https->wss).

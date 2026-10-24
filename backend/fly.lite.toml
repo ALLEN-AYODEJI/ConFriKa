@@ -1,0 +1,66 @@
+# Lightweight / near-free Fly.io config for the ConFriKa backend.
+#
+# This is the "test first" deploy: no self-hosted NLLB (so a tiny machine, no
+# 4GB RAM, no 2.4GB model upload), SQLite instead of managed Postgres, and no
+# Redis. It validates the whole stack live — auth/OTP, DMs, communities, calls
+# signalling, push (FCM), billing/entitlements, ads — over a real HTTPS URL.
+# Translation runs in `echo` passthrough (text returned untranslated).
+#
+# Deploy:  cd backend && fly deploy -c fly.lite.toml
+# To graduate to production NLLB later, redeploy the same app with fly.toml and
+# `fly scale vm shared-cpu-2x --memory 4096`, then upload the model.
+
+app = "confrika-backend"
+primary_region = "jnb"   # Johannesburg — closest Fly region to most of Africa
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  # Passthrough translator: never loads torch/NLLB, so this fits a tiny machine.
+  TRANSLATION_PROVIDER = "echo"
+  TRANSLATION_WARMUP = "false"
+  # SQLite + media live on the persistent volume mounted at /opt/confrika.
+  DATABASE_URL = "sqlite+aiosqlite:////opt/confrika/confrika.db"
+  MEDIA_DIR = "/opt/confrika/media"
+  # FCM service-account JSON is uploaded to the volume (see deploy notes).
+  FCM_CREDENTIALS_FILE = "/opt/confrika/firebase-service-account.json"
+  # Monetization client-facing flags.
+  ADS_ENABLED = "true"
+  PLAY_PACKAGE_NAME = "com.confrika.confrika_mobile"
+  PRO_PRODUCT_IDS = "confrika_pro_monthly,confrika_pro_yearly"
+  # Billing stays strict: unverified purchases are rejected in production.
+  BILLING_TRUST_UNVERIFIED = "false"
+  ALLOWED_ORIGINS = "https://confrika.online,https://www.confrika.online"
+
+# One small persistent volume for the SQLite DB + uploaded media + FCM creds.
+[mounts]
+  source = "confrika_data"
+  destination = "/opt/confrika"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Scale to zero when idle so the free trial's 2h machine-runtime stretches
+  # across days of light testing. First request after idle cold-starts (~secs).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 80
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/health"
+
+# Tiny machine: echo translator needs no model, so 512MB is plenty.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
