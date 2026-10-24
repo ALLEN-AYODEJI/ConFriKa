@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/crypto/e2ee_service.dart';
 import '../../core/network/api_client.dart';
+import '../../core/services/ads_service.dart';
+import '../../core/services/billing_service.dart';
+import '../../core/services/entitlement_service.dart';
 import '../../core/services/push_messaging_service.dart';
 import '../../core/session.dart';
 import '../../core/widgets/confrika_brand_widgets.dart';
+import '../billing/pro_paywall_screen.dart';
 import '../connect/active_call_screen.dart';
 import '../connect/connect_call_screen.dart';
 import '../home/home_screen.dart';
@@ -63,6 +67,9 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
     _healthTimer = Timer.periodic(const Duration(seconds: 30), (_) => _pollHealth());
     _bootstrapEncryptionKey();
     _bootstrapPush();
+    // Load the user's plan (free/Pro) so ads + feature gates reflect reality.
+    EntitlementService.instance.refresh();
+    BillingService.instance.init();
   }
 
   /// Register this device for push notifications and route incoming-call pushes
@@ -194,6 +201,7 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
               ),
             ),
             const Spacer(),
+            _proButton(),
             _themeToggle(isDark),
             const SizedBox(width: 8),
             _languageChip(isDark),
@@ -202,7 +210,14 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
           ],
         ),
       ),
-      body: SafeArea(child: screens[_currentIndex]),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(child: screens[_currentIndex]),
+            const ConFriKaAdBanner(),
+          ],
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
@@ -239,6 +254,29 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Crown shortcut to the Pro paywall. Hidden for users already on Pro.
+  Widget _proButton() {
+    return ValueListenableBuilder<Entitlements>(
+      valueListenable: EntitlementService.instance.notifier,
+      builder: (context, ent, _) {
+        if (ent.isPro) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: InkWell(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const ProPaywallScreen(),
+            )),
+            borderRadius: BorderRadius.circular(20),
+            child: const Tooltip(
+              message: 'Upgrade to ConFriKa Pro',
+              child: Icon(Icons.workspace_premium, color: Color(0xFFE87722)),
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -26,6 +26,8 @@ dependencies:
   firebase_messaging: ^15.1.6
   image_picker: ^1.1.2
   emoji_picker_flutter: ^4.3.0
+  in_app_purchase: ^3.3.0
+  google_mobile_ads: ^9.0.0
 
 dev_dependencies:
   flutter_test:

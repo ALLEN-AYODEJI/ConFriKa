@@ -567,4 +567,19 @@ class ConFriKaApiClient {
       if (sdpOffer != null) 'sdp_offer': sdpOffer,
     })) as Map<String, dynamic>;
   }
+
+  // ── Billing / ConFriKa Pro ────────────────────────────────────────────
+  Future<Map<String, dynamic>> entitlements() async =>
+      (await _get('/api/v1/billing/entitlements')) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> verifyPurchase({
+    required String platform,
+    required String productId,
+    required String token,
+  }) async =>
+      (await _post('/api/v1/billing/verify', {
+        'platform': platform,
+        'product_id': productId,
+        'token': token,
+      })) as Map<String, dynamic>;
 }

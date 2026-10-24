@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/services/ads_service.dart';
 import 'core/services/audio_service.dart';
 import 'core/services/callkit_service.dart';
 import 'core/session.dart';
@@ -12,6 +13,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   ConFriKaCallKitService().initialize();
   ConFriKaAudioService().initialize();
+  AdsService.instance.init(); // non-blocking; ads only shown to free users
   await ConFriKaSession.instance.load();
   runApp(const ConFriKaApp());
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'network/api_client.dart';
+import 'services/entitlement_service.dart';
 
 /// Holds the authenticated user and JWT, persisted across launches.
 class ConFriKaSession extends ChangeNotifier {
@@ -79,6 +80,7 @@ class ConFriKaSession extends ChangeNotifier {
     _token = null;
     _user = null;
     ConFriKaApiClient.instance.setAuthToken(null);
+    EntitlementService.instance.reset();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kToken);
     await prefs.remove(_kUser);
