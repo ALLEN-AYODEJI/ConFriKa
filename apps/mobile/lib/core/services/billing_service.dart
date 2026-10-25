@@ -34,7 +34,7 @@ class BillingService {
     _started = true;
     _sub = _iap.purchaseStream.listen(
       _onPurchases,
-      onError: (e) => status.value = 'Store error: $e',
+      onError: (e) => status.value = 'The store is unavailable right now.',
     );
   }
 
@@ -74,7 +74,7 @@ class BillingService {
       // Subscriptions are non-consumable.
       await _iap.buyNonConsumable(purchaseParam: param);
     } catch (e) {
-      status.value = 'Could not start purchase: $e';
+      status.value = 'Couldn\'t start the purchase. Please try again.';
       busy.value = false;
     }
   }
@@ -85,7 +85,7 @@ class BillingService {
     try {
       await _iap.restorePurchases();
     } catch (e) {
-      status.value = 'Restore failed: $e';
+      status.value = 'Couldn\'t restore purchases. Please try again.';
     } finally {
       busy.value = false;
     }
@@ -136,7 +136,7 @@ class BillingService {
     } on ApiException catch (e) {
       status.value = 'Verification failed: ${e.message}';
     } catch (e) {
-      status.value = 'Verification error: $e';
+      status.value = 'Couldn\'t verify the purchase. Please try again.';
     } finally {
       busy.value = false;
     }

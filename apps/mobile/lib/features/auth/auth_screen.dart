@@ -87,7 +87,7 @@ class _ConFriKaAuthScreenState extends State<ConFriKaAuthScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Something went wrong: $e');
+      setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -129,7 +129,7 @@ class _ConFriKaAuthScreenState extends State<ConFriKaAuthScreen> {
         setState(() => _error = e.message);
       }
     } catch (e) {
-      setState(() => _error = 'Something went wrong: $e');
+      setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

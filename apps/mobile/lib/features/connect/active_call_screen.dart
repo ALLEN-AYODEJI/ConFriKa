@@ -182,7 +182,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     } catch (e) {
       setState(() {
         _phase = CallPhase.failed;
-        _error = 'Call failed: $e';
+        _error = 'Call failed. Please try again.';
       });
     }
   }
@@ -202,7 +202,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     } catch (e) {
       setState(() {
         _phase = CallPhase.failed;
-        _error = 'Could not answer: $e';
+        _error = 'Couldn\'t answer the call. Please try again.';
       });
     }
   }

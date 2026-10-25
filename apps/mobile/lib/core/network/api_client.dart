@@ -38,15 +38,19 @@ class ConFriKaApiClient {
       );
 
   Never _fail(http.Response res) {
-    String msg;
+    // Surface only the server's human-readable `detail` (e.g. "User not found",
+    // "Invalid credentials", "You've reached today's limit"). Never leak raw
+    // response bodies or status codes to the user.
+    String? detail;
     try {
       final body = jsonDecode(res.body);
-      msg = (body is Map && body['detail'] != null)
-          ? body['detail'].toString()
-          : res.body;
-    } catch (_) {
-      msg = res.body.isEmpty ? 'Request failed (${res.statusCode})' : res.body;
-    }
+      if (body is Map && body['detail'] != null) {
+        detail = body['detail'].toString();
+      }
+    } catch (_) {/* non-JSON body */}
+    final msg = (detail != null && detail.trim().isNotEmpty)
+        ? detail
+        : 'Something went wrong. Please try again.';
     throw ApiException(res.statusCode, msg);
   }
 
@@ -54,13 +58,13 @@ class ConFriKaApiClient {
     try {
       final res = await http
           .get(_uri(path, query), headers: _headers)
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 40));
       if (res.statusCode >= 200 && res.statusCode < 300) return jsonDecode(res.body);
       _fail(res);
     } on ApiException {
       rethrow;
     } catch (e) {
-      throw ApiException(0, 'Network error: $e');
+      throw ApiException(0, 'Connection problem. Please check your internet and try again.');
     }
   }
 
@@ -76,7 +80,7 @@ class ConFriKaApiClient {
     } on ApiException {
       rethrow;
     } catch (e) {
-      throw ApiException(0, 'Network error: $e');
+      throw ApiException(0, 'Connection problem. Please check your internet and try again.');
     }
   }
 
@@ -92,7 +96,7 @@ class ConFriKaApiClient {
     } on ApiException {
       rethrow;
     } catch (e) {
-      throw ApiException(0, 'Network error: $e');
+      throw ApiException(0, 'Connection problem. Please check your internet and try again.');
     }
   }
 
@@ -108,7 +112,7 @@ class ConFriKaApiClient {
     } on ApiException {
       rethrow;
     } catch (e) {
-      throw ApiException(0, 'Network error: $e');
+      throw ApiException(0, 'Connection problem. Please check your internet and try again.');
     }
   }
 
@@ -312,7 +316,7 @@ class ConFriKaApiClient {
     } on ApiException {
       rethrow;
     } catch (e) {
-      throw ApiException(0, 'Network error: $e');
+      throw ApiException(0, 'Connection problem. Please check your internet and try again.');
     }
   }
 
@@ -351,7 +355,7 @@ class ConFriKaApiClient {
     } on ApiException {
       rethrow;
     } catch (e) {
-      throw ApiException(0, 'Upload failed: $e');
+      throw ApiException(0, 'Upload failed. Please try again.');
     }
   }
 
