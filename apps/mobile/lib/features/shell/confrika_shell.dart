@@ -189,8 +189,9 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
         backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
         title: Row(
           children: [
-            // Brand (shrinks gracefully if space is tight).
-            const Flexible(
+            // Brand — takes the remaining space so the wordmark is never
+            // squeezed on small screens; the trailing controls keep their size.
+            const Expanded(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -200,7 +201,7 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
                 ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             _proButton(),
             _themeToggle(isDark),
             const SizedBox(width: 8),
@@ -357,7 +358,10 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
   Widget _connectionDot(bool isDark) {
     final online = _connected;
     final color = online ? const Color(0xFF10B981) : Colors.grey;
-    final label = online ? '${_onlineCount ?? 0}' : 'off';
+    final count = _onlineCount ?? 0;
+    // Show a count only when there's actually someone online; a bare "0" is
+    // noise, so online-with-nobody shows just the green dot.
+    final label = online ? (count > 0 ? '$count' : '') : 'off';
     return Tooltip(
       message: online
           ? '${_onlineCount ?? 0} people online'
@@ -373,15 +377,17 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('●', style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: online ? const Color(0xFF047857) : Colors.grey.shade700,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
+            if (label.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: online ? const Color(0xFF047857) : Colors.grey.shade700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

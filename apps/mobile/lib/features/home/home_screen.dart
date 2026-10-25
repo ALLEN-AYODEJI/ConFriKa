@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _contacts = [];
   bool _loadingContacts = true;
   String? _contactsError;
+  String _welcomeWord = 'WELCOME';
   int? _onlineCount;
   bool _adding = false;
 
@@ -80,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     _selectedDialect = '${_selectedCountry.flag} $dialect';
     _refresh();
+    _loadWelcome();
   }
 
   @override
@@ -93,29 +95,51 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadingContacts = true;
       _contactsError = null;
     });
+    // Contacts is the critical call — load it on its own so a hiccup in the
+    // presence/stats calls can never make the contacts list look "failed".
     try {
-      final results = await Future.wait([
-        _api.contacts(),
-        _api.health(),
-        _api.meStats(),
-      ]);
+      final c = await _api.contacts();
+      if (mounted) setState(() => _contacts = c);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _contactsError = e.message);
+    } finally {
+      if (mounted) setState(() => _loadingContacts = false);
+    }
+    // Presence + learning stats are best-effort; they never block or error the
+    // contacts view.
+    _api.health().then((h) {
+      if (mounted) {
+        setState(() => _onlineCount = (h['online_users'] as num?)?.toInt());
+      }
+    }).catchError((_) {});
+    _api.meStats().then((stats) {
       if (!mounted) return;
       setState(() {
-        _contacts = results[0] as List<dynamic>;
-        _onlineCount = ((results[1] as Map)['online_users'] as num?)?.toInt();
-        final stats = results[2] as Map<String, dynamic>;
         _streakDays = (stats['streak_days'] as num?)?.toInt() ?? 0;
         _xp = (stats['xp'] as num?)?.toInt() ?? 0;
         _wordsLearned = (stats['words_learned'] as num?)?.toInt() ?? 0;
         _isCalibrated = stats['is_calibrated'] == true;
-        _loadingContacts = false;
       });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _contactsError = e.message;
-        _loadingContacts = false;
-      });
+    }).catchError((_) {});
+  }
+
+  /// Translate the "WELCOME" eyebrow into the user's registration dialect
+  /// (best-effort; falls back to English). Non-English dialects only.
+  Future<void> _loadWelcome() async {
+    final dialect = ConFriKaSession.instance.primaryDialect.trim();
+    if (dialect.isEmpty || dialect.toLowerCase().contains('english')) return;
+    try {
+      final res = await _api.translate(
+        text: 'Welcome',
+        sourceDialect: 'English',
+        targetDialect: dialect,
+      );
+      final t = (res['translated_text'] as String?)?.trim();
+      if (t != null && t.isNotEmpty && mounted) {
+        setState(() => _welcomeWord = t.toUpperCase());
+      }
+    } catch (_) {
+      // keep the English fallback
     }
   }
 
@@ -191,9 +215,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    const Text(
-                                      'WELCOME',
-                                      style: TextStyle(
+                                    Text(
+                                      _welcomeWord,
+                                      style: const TextStyle(
                                         color: ConFriKaColors.sunsetOrange,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w900,
@@ -721,7 +745,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_contactsError != null)
-            _infoCard('Could not load contacts: $_contactsError', Colors.redAccent)
+            _infoCard(_contactsError!, Colors.redAccent)
           else if (_contacts.isEmpty)
             _emptyContacts()
           else
