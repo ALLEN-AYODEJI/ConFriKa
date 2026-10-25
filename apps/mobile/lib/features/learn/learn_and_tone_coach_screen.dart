@@ -296,6 +296,11 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
   List<double> _learnerContour = const [];
   int _sampleCount = 0;
 
+  // Auto-stop: end the recording ~0.8s after the speaker finishes the word.
+  bool _hasSpoken = false;
+  int _voicedRun = 0;
+  int _trailingSilence = 0;
+
   List<double> get _targets {
     final community = (widget.pair['community_target_semitones'] as List?);
     final src = community ?? (widget.pair['target_semitones'] as List? ?? const []);
@@ -333,6 +338,9 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
       _liveDisplay.clear();
       _liveVoiced.clear();
       _sampleCount = 0;
+      _hasSpoken = false;
+      _voicedRun = 0;
+      _trailingSilence = 0;
 
       final stream = await _recorder.startStream(
         const RecordConfig(
@@ -363,11 +371,26 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
         if (semis.isEmpty) return;
         for (final s in semis) {
           _liveDisplay.add(s);
-          if (s != null) _liveVoiced.add(s);
+          if (s != null) {
+            _liveVoiced.add(s);
+            _voicedRun++;
+            if (_voicedRun >= 3) _hasSpoken = true; // sustained voicing = speech
+            _trailingSilence = 0;
+          } else {
+            _voicedRun = 0;
+            if (_hasSpoken) _trailingSilence++;
+          }
           _sampleCount++;
         }
         _updateLiveHint();
         if (mounted && _stage == _Stage.recording) setState(() {});
+        // Stop automatically once the speaker has gone quiet for ~0.8s after
+        // speaking (40 frames at the 20ms hop), then score.
+        if (_hasSpoken &&
+            _trailingSilence >= 40 &&
+            _stage == _Stage.recording) {
+          _stopAndScore();
+        }
       });
     } catch (e) {
       setState(() {
@@ -406,6 +429,8 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
   }
 
   Future<void> _stopAndScore() async {
+    if (_stage != _Stage.recording) return; // guard: auto-stop + manual Stop
+    _stage = _Stage.scoring;
     await _sub?.cancel();
     _sub = null;
     try {
