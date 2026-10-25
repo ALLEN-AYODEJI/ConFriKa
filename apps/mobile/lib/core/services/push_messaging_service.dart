@@ -1,16 +1,70 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:uuid/uuid.dart';
 
 import '../network/api_client.dart';
+
+/// Builds the native incoming-call (ringing) UI parameters for a push-delivered
+/// call. Top-level so the background isolate can use it too.
+CallKitParams incomingCallParams({
+  required String fromUser,
+  String? fromName,
+  String? sessionId,
+}) {
+  final id =
+      (sessionId != null && sessionId.isNotEmpty) ? sessionId : const Uuid().v4();
+  return CallKitParams(
+    id: id,
+    nameCaller: (fromName != null && fromName.isNotEmpty) ? fromName : fromUser,
+    appName: 'ConFriKa',
+    handle: fromUser,
+    type: 0,
+    duration: 45000,
+    textAccept: 'Answer',
+    textDecline: 'Decline',
+    extra: <String, dynamic>{
+      'callerUsername': fromUser,
+      if (sessionId != null) 'session_id': sessionId,
+    },
+    android: const AndroidParams(
+      isCustomNotification: true,
+      isShowLogo: true,
+      ringtonePath: 'system_ringtone_default',
+      backgroundColor: '#0D4C85',
+      actionColor: '#288240',
+      textColor: '#FFFFFF',
+      incomingCallNotificationChannelName: 'ConFriKa In-App Voice Calls',
+      missedCallNotificationChannelName: 'ConFriKa Missed Calls',
+    ),
+    ios: const IOSParams(
+      iconName: 'CallKitIcon',
+      handleType: 'generic',
+      supportsVideo: false,
+    ),
+  );
+}
 
 /// Handles messages delivered while the app is in the background / terminated.
 /// Must be a top-level (or static) function annotated for the VM entry point.
 @pragma('vm:entry-point')
 Future<void> firebaseBackgroundHandler(RemoteMessage message) async {
-  // The system tray notification is shown by FCM automatically for
-  // `notification` payloads. Call payloads (data-only) are picked up when the
-  // app is opened; no heavy work here.
+  final data = message.data;
+  // Ring the phone (native CallKit UI) even when the app is closed. Call pushes
+  // are sent data-only precisely so this handler runs.
+  if (data['type'] == 'incoming_call') {
+    try {
+      await FlutterCallkitIncoming.showCallkitIncoming(incomingCallParams(
+        fromUser: data['from_user']?.toString() ?? '',
+        fromName: data['from_name']?.toString(),
+        sessionId: data['session_id']?.toString(),
+      ));
+    } catch (_) {/* best effort */}
+  }
+  // Message payloads carry a notification block, so the OS shows them in the
+  // tray automatically — no work needed here.
 }
 
 /// Firebase Cloud Messaging integration: registers this device's push token so

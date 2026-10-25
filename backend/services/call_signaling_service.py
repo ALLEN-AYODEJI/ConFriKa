@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config.settings import settings
 from ..database.models import CallSession, User
 from .privacy_service import reachability_block
+from .push_service import PushService
+
+logger = logging.getLogger("confrika.calls")
 
 
 def build_ice_servers() -> List[Dict[str, Any]]:
@@ -98,6 +102,29 @@ class CallSignalingService:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         cls.ACTIVE_SESSIONS[session.id] = session_data
+
+        # Ring the callee: send a high-priority push so their phone shows the
+        # incoming-call screen even if the app is backgrounded. Best-effort —
+        # a push failure must not fail the caller's initiate request.
+        try:
+            caller_name = caller.full_name or caller.username
+            await PushService.notify_username(
+                db,
+                callee_handle,
+                title="Incoming call",
+                body=f"{caller_name} is calling you",
+                data={
+                    "type": "incoming_call",
+                    "from_user": caller.username,
+                    "from_name": caller_name,
+                    "session_id": session.id,
+                },
+                # Data-only so the callee's app wakes and shows the ringing UI
+                # (CallKit) instead of a silent tray notification.
+                notification=False,
+            )
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("Incoming-call push failed for %s: %s", callee_handle, exc)
 
         return {
             "session_id": session.id,

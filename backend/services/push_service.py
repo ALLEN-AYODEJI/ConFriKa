@@ -94,20 +94,29 @@ class PushService:
         title: str,
         body: str,
         data: Optional[dict] = None,
+        notification: bool = True,
     ) -> int:
         """Send a notification to each device token. Returns the count sent.
-        Runs the blocking HTTP off the event loop."""
+        Runs the blocking HTTP off the event loop.
+
+        ``notification=False`` sends a DATA-ONLY high-priority message (no tray
+        notification) so the app's background handler runs — used for incoming
+        calls, which must wake the app and show the native ringing UI rather
+        than a silent notification."""
         toks = [t for t in tokens if t]
         if not toks:
             return 0
         if not settings.fcm_configured:
             logger.info("[push:stub] %s → %r / %r", len(toks), title, body)
             return 0
-        return await asyncio.to_thread(cls._send_all, toks, title, body, data or {})
+        return await asyncio.to_thread(
+            cls._send_all, toks, title, body, data or {}, notification
+        )
 
     @classmethod
     async def notify_username(
-        cls, db, username: str, *, title: str, body: str, data: Optional[dict] = None
+        cls, db, username: str, *, title: str, body: str,
+        data: Optional[dict] = None, notification: bool = True,
     ) -> int:
         """Look up a user's registered device tokens and notify all of them."""
         from sqlalchemy import select
@@ -119,10 +128,12 @@ class PushService:
         tokens = (
             await db.scalars(select(DeviceToken.token).where(DeviceToken.user_id == user.id))
         ).all()
-        return await cls.notify(tokens, title=title, body=body, data=data)
+        return await cls.notify(
+            tokens, title=title, body=body, data=data, notification=notification
+        )
 
     @classmethod
-    def _send_all(cls, tokens, title, body, data) -> int:
+    def _send_all(cls, tokens, title, body, data, notification=True) -> int:
         access = _access_token()
         if not access:
             return 0
@@ -133,15 +144,17 @@ class PushService:
         sent = 0
         # FCM v1 sends one token per request.
         for tok in tokens:
-            payload = {
-                "message": {
-                    "token": tok,
-                    "notification": {"title": title, "body": body},
-                    "data": {k: str(v) for k, v in data.items()},
-                    # FCM v1 AndroidConfig.priority is an uppercase enum.
-                    "android": {"priority": "HIGH"},
-                }
+            message = {
+                "token": tok,
+                "data": {k: str(v) for k, v in data.items()},
+                # FCM v1 AndroidConfig.priority is an uppercase enum.
+                "android": {"priority": "HIGH"},
             }
+            # Data-only (no notification block) lets the app's background handler
+            # run for incoming calls; otherwise the OS just shows a tray entry.
+            if notification:
+                message["notification"] = {"title": title, "body": body}
+            payload = {"message": message}
             try:
                 req = urllib.request.Request(
                     url,
