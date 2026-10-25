@@ -260,7 +260,9 @@ class _PitchTracker {
         bestLag = lag;
       }
     }
-    if (bestLag <= 0 || bestCorr < 0.3 * energy) return 0;
+    // Lower clarity threshold so normal-volume (not shouted) speech registers;
+    // the recorder's noise suppression keeps false positives down.
+    if (bestLag <= 0 || bestCorr < 0.2 * energy) return 0;
     return sampleRate / bestLag;
   }
 }
@@ -337,6 +339,15 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
           encoder: AudioEncoder.pcm16bits,
           sampleRate: 16000,
           numChannels: 1,
+          // Use the device's voice DSP so users don't have to shout and
+          // background noise is filtered: automatic gain control, noise
+          // suppression, and echo cancellation.
+          autoGain: true,
+          noiseSuppress: true,
+          echoCancel: true,
+          androidConfig: AndroidRecordConfig(
+            audioSource: AndroidAudioSource.voiceCommunication,
+          ),
         ),
       );
       setState(() {
@@ -361,7 +372,7 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
     } catch (e) {
       setState(() {
         _stage = _Stage.error;
-        _message = 'Could not start recording: $e';
+        _message = 'Couldn\'t start recording. Please check microphone access.';
       });
     }
   }
