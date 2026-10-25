@@ -235,6 +235,12 @@ class ConFriKaApiClient {
   Future<Map<String, dynamic>> meStats() async =>
       (await _get('/api/v1/auth/me/stats')) as Map<String, dynamic>;
 
+  /// Heartbeat so the backend marks this user online/reachable (drives the
+  /// caller's "Ringing" vs "Calling" state). Best-effort.
+  Future<void> presencePing() async {
+    await _post('/api/v1/auth/me/presence', const {});
+  }
+
   Future<void> updateTonalBaseline(double f0Hz) async {
     await _put('/api/v1/auth/me/tonal-baseline', {'f0_baseline_hz': f0Hz});
   }

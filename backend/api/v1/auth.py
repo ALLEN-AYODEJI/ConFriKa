@@ -150,6 +150,15 @@ async def register_device(
     return {"status": "registered"}
 
 
+@router.post("/me/presence")
+async def presence_ping(current_user: User = Depends(get_current_user)):
+    """Heartbeat from an open app so the user counts as online/reachable
+    (drives the caller's "Ringing" vs "Calling" state)."""
+    from ...services import presence
+    presence.heartbeat(current_user.username)
+    return {"online": True}
+
+
 class DeleteAccountRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=128)
 

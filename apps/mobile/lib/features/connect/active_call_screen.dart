@@ -173,7 +173,12 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       await _rtc.createPeerConnectionSession();
       final offer = await _rtc.createOffer();
       _sendSignal('offer', {'sdp': offer.sdp, 'type': offer.type});
-      if (mounted) setState(() => _phase = CallPhase.ringing);
+      // "Ringing…" only when the callee is reachable; otherwise "Calling…".
+      final calleeOnline = session['callee_online'] == true;
+      if (mounted) {
+        setState(() =>
+            _phase = calleeOnline ? CallPhase.ringing : CallPhase.dialing);
+      }
     } on ApiException catch (e) {
       setState(() {
         _phase = CallPhase.failed;

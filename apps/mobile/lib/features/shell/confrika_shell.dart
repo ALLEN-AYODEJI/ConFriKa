@@ -111,6 +111,9 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
   }
 
   Future<void> _pollHealth() async {
+    // Heartbeat so other users see us as online (drives their caller status:
+    // "Ringing" when we're reachable, "Calling" when we're not). Best-effort.
+    _api.presencePing().catchError((_) {});
     try {
       final h = await _api.health();
       if (!mounted) return;

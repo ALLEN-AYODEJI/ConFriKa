@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config.settings import settings
 from ..database.models import CallSession, User
+from . import presence
 from .privacy_service import reachability_block
 from .push_service import PushService
 
@@ -126,9 +127,14 @@ class CallSignalingService:
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Incoming-call push failed for %s: %s", callee_handle, exc)
 
+        # "ringing" when the callee is reachable (app open / connected) so the
+        # caller shows "Ringing…"; otherwise "calling" → caller shows "Calling…"
+        # while the push tries to wake them.
+        callee_online = presence.is_online(callee_handle)
         return {
             "session_id": session.id,
-            "status": "ringing",
+            "status": "ringing" if callee_online else "calling",
+            "callee_online": callee_online,
             "caller": caller.username,
             "callee": callee_handle,
             "call_transport": "inapp",
