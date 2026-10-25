@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'core/services/ads_service.dart';
@@ -9,13 +11,41 @@ import 'features/auth/auth_screen.dart';
 import 'features/shell/confrika_shell.dart';
 import 'features/splash/confrika_splash.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  ConFriKaCallKitService().initialize();
-  ConFriKaAudioService().initialize();
-  AdsService.instance.init(); // non-blocking; ads only shown to free users
-  await ConFriKaSession.instance.load();
-  runApp(const ConFriKaApp());
+void main() {
+  // Guard the whole startup so no single service (ads, push, callkit, a device
+  // without a given capability) can prevent the UI from rendering. The app must
+  // always reach runApp, even if an initializer throws.
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    FlutterError.onError = (details) => FlutterError.presentError(details);
+
+    // Non-critical startup tasks — each isolated so a failure is survivable.
+    try {
+      ConFriKaCallKitService().initialize();
+    } catch (e) {
+      debugPrint('CallKit init failed (non-fatal): $e');
+    }
+    try {
+      ConFriKaAudioService().initialize();
+    } catch (e) {
+      debugPrint('Audio init failed (non-fatal): $e');
+    }
+    try {
+      AdsService.instance.init(); // non-blocking; ads only shown to free users
+    } catch (e) {
+      debugPrint('Ads init failed (non-fatal): $e');
+    }
+    try {
+      await ConFriKaSession.instance.load();
+    } catch (e) {
+      debugPrint('Session load failed (non-fatal): $e');
+    }
+
+    runApp(const ConFriKaApp());
+  }, (error, stack) {
+    // Last-resort guard: never let an uncaught async error kill startup silently.
+    debugPrint('Uncaught zone error: $error\n$stack');
+  });
 }
 
 class ConFriKaApp extends StatefulWidget {

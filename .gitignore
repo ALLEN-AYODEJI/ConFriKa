@@ -28,3 +28,7 @@ node_modules/
 
 # Firebase / other mounted secrets
 deploy/secrets/
+
+# Local APK build artifacts (never commit — too large for GitHub)
+confrika-*.apk
+*.apk
