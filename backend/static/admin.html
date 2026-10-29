@@ -131,6 +131,15 @@
       .legend b{font-weight:800}
       .panel{margin-bottom:0}
       .chartcard{margin-bottom:18px}
+      /* Headline KPI strip. */
+      .kpistrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:12px;margin-bottom:18px}
+      .kpi{border-radius:14px;padding:14px 16px;color:#fff;box-shadow:var(--shadow);
+        background:linear-gradient(135deg,var(--ocean),var(--ocean-deep))}
+      .kpi:nth-child(4n+2){background:linear-gradient(135deg,var(--green),#1f6a3a)}
+      .kpi:nth-child(4n+3){background:linear-gradient(135deg,var(--sunset),#b85812)}
+      .kpi:nth-child(4n+4){background:linear-gradient(135deg,#C99A1F,#8a6a12)}
+      .kpi .n{font-size:1.8rem;font-weight:800;line-height:1.1}
+      .kpi .l{font-size:.7rem;opacity:.9;text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
       /* Grouped KPI cards: two-up, flat number tiles inside each card. */
       .groups{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:18px}
       @media(max-width:760px){.groups{grid-template-columns:1fr}}
@@ -153,6 +162,9 @@
       <div class="content">
         <section class="sec active" id="sec-overview">
           <h1 class="sectitle">Overview</h1>
+
+          <!-- Headline KPI strip -->
+          <div class="kpistrip" id="kpi"></div>
 
           <!-- Daily usage chart up top -->
           <div class="panel chartcard">
@@ -282,6 +294,8 @@ function _tiles(el, items, s){
 }
 async function loadStats(){
   const s = await api('/admin/stats');
+  const kpi=[['total_users','Total users'],['new_users_7d','New · 7 days'],['messages_24h','Messages · 24h'],['calls_total','Calls'],['web_pageviews','Website views'],['registered_devices','Installs']];
+  document.getElementById('kpi').innerHTML = kpi.map(([k,l])=>`<div class="kpi"><div class="n">${s[k]??0}</div><div class="l">${l}</div></div>`).join('');
   _tiles('t-people', [['total_users','Total users','a'],['verified_users','Verified','b'],['banned_users','Banned','d'],['total_countries','Countries','a']], s);
   _tiles('t-activity', [['new_users_24h','New users · 24h','b'],['new_users_7d','New users · 7d','a'],['messages_24h','Messages · 24h','c'],['calls_total','Calls · all time','a']], s);
   _tiles('t-reach', [['web_pageviews','Website views','a'],['app_opens','App opens','b'],['ext_opens','Extension opens','c'],['registered_devices','Installs','a','registered devices']], s);
