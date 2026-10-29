@@ -66,9 +66,9 @@ class ConFriKaAddLogoBadge extends StatelessWidget {
   }
 }
 
-/// Renders the ConFrika wordmark as a single cohesive word (one color so it
-/// reads as "ConFrika", not three segments). Brand colour lives in the emblem
-/// and the tri-colour bar; the wordmark stays legible in light and dark.
+/// Renders the ConFrika wordmark as a single word with all three brand colours
+/// flowing across it as a gradient (ocean → sunset → green). Keeps the colours
+/// but reads as one word, never "Con Fri ka".
 class ConFriKaWordmark extends StatelessWidget {
   final double fontSize;
 
@@ -76,14 +76,24 @@ class ConFriKaWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Text(
-      'ConFrika',
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.5,
-        color: isDark ? Colors.white : ConFriKaColors.oceanBlue,
+    return ShaderMask(
+      shaderCallback: (bounds) => const LinearGradient(
+        colors: [
+          ConFriKaColors.oceanBlue,
+          ConFriKaColors.sunsetOrange,
+          ConFriKaColors.savannaGreen,
+        ],
+        stops: [0.0, 0.52, 1.0],
+      ).createShader(bounds),
+      blendMode: BlendMode.srcIn,
+      child: Text(
+        'ConFrika',
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
+          color: Colors.white, // replaced by the shader
+        ),
       ),
     );
   }
