@@ -66,7 +66,9 @@ class ConFriKaAddLogoBadge extends StatelessWidget {
   }
 }
 
-/// Renders the exact tri-colored ConFriKa wordmark ("Con" Blue, "Fri" Orange, "Ka" Green).
+/// Renders the ConFrika wordmark as a single cohesive word (one color so it
+/// reads as "ConFrika", not three segments). Brand colour lives in the emblem
+/// and the tri-colour bar; the wordmark stays legible in light and dark.
 class ConFriKaWordmark extends StatelessWidget {
   final double fontSize;
 
@@ -74,27 +76,14 @@ class ConFriKaWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.5,
-        ),
-        children: const [
-          TextSpan(
-            text: 'Con',
-            style: TextStyle(color: ConFriKaColors.oceanBlue),
-          ),
-          TextSpan(
-            text: 'Fri',
-            style: TextStyle(color: ConFriKaColors.sunsetOrange),
-          ),
-          TextSpan(
-            text: 'ka',
-            style: TextStyle(color: ConFriKaColors.savannaGreen),
-          ),
-        ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Text(
+      'ConFrika',
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.5,
+        color: isDark ? Colors.white : ConFriKaColors.oceanBlue,
       ),
     );
   }
