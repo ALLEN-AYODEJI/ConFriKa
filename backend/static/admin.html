@@ -104,40 +104,70 @@
 
 <div id="appView" class="hide">
   <header>
-    <div class="brand"><img id="logo2" alt=""><span><span class="c">Con</span><span class="f">Fri</span><span class="k">Ka</span></span></div>
+    <div class="brand"><img id="logo2" alt=""><span><span class="c">Con</span><span class="f">Fri</span><span class="k">ka</span></span></div>
     <span class="tag">Admin</span>
     <span class="sp"></span>
     <span class="who" id="who"></span>
     <button onclick="logout()">Sign out</button>
   </header>
   <main>
-    <div class="tiles" id="tiles"></div>
-    <div class="row">
-      <div class="panel">
-        <h2><span class="dot"></span>Users by country</h2>
-        <div id="countries"></div>
-      </div>
-      <div class="panel">
-        <h2><span class="dot"></span>Users</h2>
-        <div class="search">
-          <input id="q" placeholder="Search by username, email or name" oninput="debouncedUsers()" />
-        </div>
-        <table><thead><tr><th>User</th><th>Country</th><th>Status</th><th></th></tr></thead>
-        <tbody id="users"></tbody></table>
-      </div>
-    </div>
-    <div class="row">
-      <div class="panel">
-        <h2><span class="dot"></span>Payout requests</h2>
-        <div id="withdrawals"></div>
-      </div>
-      <div class="panel">
-        <h2><span class="dot"></span>Teachers</h2>
-        <div class="search">
-          <input id="tq" placeholder="Search teacher by name or language" oninput="debouncedTeachers()" />
-        </div>
-        <table><thead><tr><th>Teacher</th><th>Confirmed</th><th>Reward</th><th>Status</th><th></th></tr></thead>
-        <tbody id="teachers"></tbody></table>
+    <style>
+      .shell{display:grid;grid-template-columns:210px 1fr;gap:20px;align-items:start}
+      @media(max-width:720px){.shell{grid-template-columns:1fr}.side{position:static !important;flex-direction:row !important;flex-wrap:wrap}}
+      .side{display:flex;flex-direction:column;gap:8px;position:sticky;top:78px}
+      .navitem{display:flex;align-items:center;gap:8px;text-align:left;background:var(--card);
+        border:1px solid var(--line);border-radius:11px;padding:12px 14px;font-weight:700;
+        font-size:.95rem;color:var(--fg);cursor:pointer;flex:1 0 auto}
+      .navitem:hover{border-color:var(--ocean)}
+      .navitem.active{background:var(--ocean);color:#fff;border-color:transparent}
+      .sec{display:none} .sec.active{display:block}
+      .sectitle{font-size:1.35rem;font-weight:800;margin:0 0 16px}
+    </style>
+    <div class="shell">
+      <aside class="side">
+        <button class="navitem active" data-sec="overview">Overview</button>
+        <button class="navitem" data-sec="users">Users</button>
+        <button class="navitem" data-sec="teachers">Teachers</button>
+        <button class="navitem" data-sec="payouts">Payouts</button>
+      </aside>
+      <div class="content">
+        <section class="sec active" id="sec-overview">
+          <h1 class="sectitle">Overview</h1>
+          <div class="tiles" id="tiles"></div>
+          <div class="panel">
+            <h2><span class="dot"></span>Users by country</h2>
+            <div id="countries"></div>
+          </div>
+        </section>
+
+        <section class="sec" id="sec-users">
+          <h1 class="sectitle">Users</h1>
+          <div class="panel">
+            <div class="search">
+              <input id="q" placeholder="Search by username, email or name" oninput="debouncedUsers()" />
+            </div>
+            <table><thead><tr><th>User</th><th>Country</th><th>Status</th><th></th></tr></thead>
+            <tbody id="users"></tbody></table>
+          </div>
+        </section>
+
+        <section class="sec" id="sec-teachers">
+          <h1 class="sectitle">Teachers</h1>
+          <div class="panel">
+            <div class="search">
+              <input id="tq" placeholder="Search teacher by name or language" oninput="debouncedTeachers()" />
+            </div>
+            <table><thead><tr><th>Teacher</th><th>Confirmed</th><th>Reward</th><th>Status</th><th></th></tr></thead>
+            <tbody id="teachers"></tbody></table>
+          </div>
+        </section>
+
+        <section class="sec" id="sec-payouts">
+          <h1 class="sectitle">Payout requests</h1>
+          <div class="panel">
+            <div id="withdrawals"></div>
+          </div>
+        </section>
       </div>
     </div>
   </main>
@@ -239,6 +269,11 @@ async function markPaid(id){
   try{ await api(`/admin/withdrawals/${encodeURIComponent(id)}/mark-paid`,{method:'POST'}); loadWithdrawals(); loadStats(); loadTeachers(); }
   catch(e){ alert(e.message); }
 }
+// Sidebar: show only the clicked section (Overview is its own section).
+document.querySelectorAll('.navitem').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.navitem').forEach(x=>x.classList.toggle('active', x===b));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('active', s.id==='sec-'+b.dataset.sec));
+}));
 if(token){ fetch(API+'/admin/me',{headers:{'Authorization':'Bearer '+token}}).then(r=>r.ok?r.json():Promise.reject()).then(showApp).catch(()=>{localStorage.removeItem('confrika_admin_token');}); }
 </script>
 </body>
