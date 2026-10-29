@@ -49,3 +49,52 @@ async def unban_user(
     db: AsyncSession = Depends(get_db),
 ):
     return await AdminService.set_banned(db, admin, username, False)
+
+
+# ── Teach & Earn moderation ─────────────────────────────────────────────────
+@router.get("/teachers")
+async def list_teachers(
+    q: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.list_teachers(db, q, limit, offset)
+
+
+@router.post("/teachers/{username}/verify")
+async def verify_teacher(
+    username: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.set_teacher_verified(db, username, True)
+
+
+@router.post("/teachers/{username}/unverify")
+async def unverify_teacher(
+    username: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.set_teacher_verified(db, username, False)
+
+
+@router.get("/withdrawals")
+async def list_withdrawals(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.list_withdrawals(db, limit, offset)
+
+
+@router.post("/withdrawals/{withdrawal_id}/mark-paid")
+async def mark_withdrawal_paid(
+    withdrawal_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.mark_withdrawal_paid(db, withdrawal_id)

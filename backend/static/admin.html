@@ -126,6 +126,20 @@
         <tbody id="users"></tbody></table>
       </div>
     </div>
+    <div class="row">
+      <div class="panel">
+        <h2><span class="dot"></span>Payout requests</h2>
+        <div id="withdrawals"></div>
+      </div>
+      <div class="panel">
+        <h2><span class="dot"></span>Teachers</h2>
+        <div class="search">
+          <input id="tq" placeholder="Search teacher by name or language" oninput="debouncedTeachers()" />
+        </div>
+        <table><thead><tr><th>Teacher</th><th>Confirmed</th><th>Reward</th><th>Status</th><th></th></tr></thead>
+        <tbody id="teachers"></tbody></table>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -160,13 +174,14 @@ function showApp(me){
   document.getElementById('loginView').classList.add('hide');
   document.getElementById('appView').classList.remove('hide');
   document.getElementById('who').textContent = me.full_name || me.username;
-  loadStats(); loadUsers();
+  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals();
 }
 function initials(n){return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join().toUpperCase();}
 async function loadStats(){
   const s = await api('/admin/stats');
   const tiles=[['total_users','Total users','a'],['verified_users','Verified','b'],['banned_users','Banned','d'],
-    ['total_countries','Countries','a'],['total_communities','Communities','c'],['direct_messages','Direct msgs','a'],['global_messages','Global msgs','b']];
+    ['total_countries','Countries','a'],['total_communities','Communities','c'],['direct_messages','Direct msgs','a'],['global_messages','Global msgs','b'],
+    ['teachers','Teachers','c'],['verified_teachers','Verified teachers','b'],['reward_owed','Rewards owed','c'],['pending_withdrawals','Pending payouts','d']];
   document.getElementById('tiles').innerHTML = tiles.map(([k,l,c])=>`<div class="tile ${c}"><div class="n">${s[k]??0}</div><div class="l">${l}</div></div>`).join('');
   const max = Math.max(1, ...s.users_by_country.map(c=>c.count));
   document.getElementById('countries').innerHTML = s.users_by_country.map(c=>
@@ -189,6 +204,39 @@ let _t; function debouncedUsers(){ clearTimeout(_t); _t=setTimeout(loadUsers, 30
 async function setBan(username, banned){
   if(!confirm((banned?'Ban ':'Unban ')+username+'?')) return;
   try{ await api(`/admin/users/${encodeURIComponent(username)}/${banned?'ban':'unban'}`,{method:'POST'}); loadUsers(); loadStats(); }
+  catch(e){ alert(e.message); }
+}
+async function loadTeachers(){
+  const q = document.getElementById('tq').value.trim();
+  const list = await api('/admin/teachers'+(q?('?q='+encodeURIComponent(q)):''));
+  document.getElementById('teachers').innerHTML = list.map(t=>{
+    const av = t.avatar_url ? `<img src="${MEDIA+t.avatar_url}" alt="">` : initials(t.full_name);
+    const langs = (t.languages||[]).join(', ');
+    const status = t.is_verified?'<span class="pill adm">Verified</span>':(t.is_active?'<span class="pill ok">Active</span>':'<span class="pill ban">Hidden</span>');
+    const btn = t.is_verified
+      ?`<button class="act unban" onclick="setVerified('${t.username}',false)">Unverify</button>`
+      :`<button class="act ban" onclick="setVerified('${t.username}',true)">Verify</button>`;
+    return `<tr><td><div class="u"><div class="av">${av}</div><div><b>${t.username}</b><div class="em">${langs}</div></div></div></td><td>${t.confirmed_count}</td><td>${t.reward}</td><td>${status}</td><td style="text-align:right">${btn}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted">No teachers yet</td></tr>';
+}
+let _tt; function debouncedTeachers(){ clearTimeout(_tt); _tt=setTimeout(loadTeachers, 300); }
+async function setVerified(username, verified){
+  if(!confirm((verified?'Verify ':'Unverify ')+username+'?')) return;
+  try{ await api(`/admin/teachers/${encodeURIComponent(username)}/${verified?'verify':'unverify'}`,{method:'POST'}); loadTeachers(); loadStats(); }
+  catch(e){ alert(e.message); }
+}
+async function loadWithdrawals(){
+  const list = await api('/admin/withdrawals');
+  document.getElementById('withdrawals').innerHTML = list.map(w=>{
+    const paid = w.status==='paid';
+    const pill = paid?'<span class="pill ok">Paid</span>':'<span class="pill ban">'+w.status+'</span>';
+    const btn = paid?'':`<button class="act unban" onclick="markPaid('${w.id}')">Mark paid</button>`;
+    return `<div class="cc"><div class="t"><span><b>${w.username}</b> · ${w.amount}</span>${pill}</div><div style="display:flex;justify-content:flex-end;margin-top:4px">${btn}</div></div>`;
+  }).join('') || '<p class="muted">No payout requests</p>';
+}
+async function markPaid(id){
+  if(!confirm('Mark this payout as paid? This clears the teacher\'s balance.')) return;
+  try{ await api(`/admin/withdrawals/${encodeURIComponent(id)}/mark-paid`,{method:'POST'}); loadWithdrawals(); loadStats(); loadTeachers(); }
   catch(e){ alert(e.message); }
 }
 if(token){ fetch(API+'/admin/me',{headers:{'Authorization':'Bearer '+token}}).then(r=>r.ok?r.json():Promise.reject()).then(showApp).catch(()=>{localStorage.removeItem('confrika_admin_token');}); }

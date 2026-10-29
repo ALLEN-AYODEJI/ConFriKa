@@ -15,10 +15,16 @@ from ..database.models import (
     Community,
     DirectMessage,
     GlobalSpacesMessage,
+    TeacherProfile,
     User,
+    WithdrawalRequest,
 )
 from ..database.session import get_db
 from ..api.v1.auth import get_current_user
+
+
+def _money(cents: int) -> str:
+    return f"{(cents or 0) / 100:.2f} {settings.TEACHER_REWARD_CURRENCY}"
 
 
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -71,6 +77,21 @@ class AdminService:
             )
         ).all()
         by_country = [{"country": c, "count": n} for c, n in rows]
+        # ── Teach & Earn ──────────────────────────────────────────────────
+        teachers = await db.scalar(select(func.count(TeacherProfile.id))) or 0
+        verified_teachers = await db.scalar(
+            select(func.count(TeacherProfile.id)).where(
+                TeacherProfile.is_verified == True  # noqa: E712
+            )
+        ) or 0
+        reward_owed_cents = await db.scalar(
+            select(func.coalesce(func.sum(TeacherProfile.reward_cents), 0))
+        ) or 0
+        pending_withdrawals = await db.scalar(
+            select(func.count(WithdrawalRequest.id)).where(
+                WithdrawalRequest.status != "paid"
+            )
+        ) or 0
         return {
             "total_users": total_users,
             "verified_users": verified,
@@ -80,6 +101,10 @@ class AdminService:
             "direct_messages": dm_count,
             "global_messages": space_count,
             "users_by_country": by_country,
+            "teachers": teachers,
+            "verified_teachers": verified_teachers,
+            "reward_owed": _money(reward_owed_cents),
+            "pending_withdrawals": pending_withdrawals,
         }
 
     @staticmethod
@@ -131,3 +156,97 @@ class AdminService:
         user.is_banned = banned
         await db.commit()
         return {"username": handle, "is_banned": banned}
+
+    # ── Teach & Earn moderation ──────────────────────────────────────────
+    @staticmethod
+    async def list_teachers(
+        db: AsyncSession, q: Optional[str], limit: int, offset: int
+    ) -> List[Dict[str, Any]]:
+        stmt = select(TeacherProfile, User).join(User, User.id == TeacherProfile.user_id)
+        if q:
+            like = f"%{q.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(User.username).like(like),
+                    func.lower(User.full_name).like(like),
+                    func.lower(TeacherProfile.languages).like(like),
+                )
+            )
+        stmt = stmt.order_by(TeacherProfile.confirmed_count.desc()).limit(limit).offset(offset)
+        rows = (await db.execute(stmt)).all()
+        return [
+            {
+                "username": u.username,
+                "full_name": u.full_name,
+                "avatar_url": u.avatar_url,
+                "languages": [s.strip() for s in (p.languages or "").split(",") if s.strip()],
+                "is_verified": p.is_verified,
+                "is_active": p.is_active,
+                "confirmed_count": p.confirmed_count,
+                "rating_count": p.rating_count,
+                "avg_rating": round(p.rating_sum / p.rating_count, 2) if p.rating_count else 0.0,
+                "reward": _money(p.reward_cents),
+            }
+            for p, u in rows
+        ]
+
+    @staticmethod
+    async def set_teacher_verified(
+        db: AsyncSession, username: str, verified: bool
+    ) -> Dict[str, Any]:
+        from .auth_service import normalize_username
+
+        handle = normalize_username(username)
+        user = await db.scalar(select(User).where(User.username == handle))
+        profile = (
+            await db.scalar(select(TeacherProfile).where(TeacherProfile.user_id == user.id))
+            if user else None
+        )
+        if user is None or profile is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found.")
+        profile.is_verified = verified
+        await db.commit()
+        return {"username": handle, "is_verified": verified}
+
+    @staticmethod
+    async def list_withdrawals(
+        db: AsyncSession, limit: int, offset: int
+    ) -> List[Dict[str, Any]]:
+        stmt = (
+            select(WithdrawalRequest, User)
+            .join(User, User.id == WithdrawalRequest.teacher_user_id)
+            .order_by(WithdrawalRequest.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await db.execute(stmt)).all()
+        return [
+            {
+                "id": w.id,
+                "username": u.username,
+                "full_name": u.full_name,
+                "amount": _money(w.amount_cents),
+                "status": w.status,
+                "created_at": w.created_at.isoformat() if w.created_at else None,
+            }
+            for w, u in rows
+        ]
+
+    @staticmethod
+    async def mark_withdrawal_paid(
+        db: AsyncSession, withdrawal_id: str
+    ) -> Dict[str, Any]:
+        w = await db.scalar(
+            select(WithdrawalRequest).where(WithdrawalRequest.id == withdrawal_id)
+        )
+        if w is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found.")
+        w.status = "paid"
+        # Settling a payout clears the teacher's accrued balance.
+        profile = await db.scalar(
+            select(TeacherProfile).where(TeacherProfile.user_id == w.teacher_user_id)
+        )
+        if profile is not None:
+            profile.reward_cents = max(0, profile.reward_cents - w.amount_cents)
+        await db.commit()
+        return {"id": withdrawal_id, "status": "paid"}
