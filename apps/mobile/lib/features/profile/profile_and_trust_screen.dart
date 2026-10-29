@@ -308,12 +308,12 @@ class _ProfileAndTrustScreenState extends State<ProfileAndTrustScreen> {
       'voice samples used for tonal coaching. Translation is processed on our own '
       'servers using open neural models; we do not sell your data. Call audio is '
       'peer-to-peer and does not pass through our servers. You can delete your '
-      'account at any time. See the full policy at confrika.com/privacy.';
+      'account at any time. See the full policy at confrika.online/privacy.';
 
   static const _terms =
       'By using ConFriKa you agree to use the service lawfully and respectfully. '
       'Automatic translation is provided on a best-effort basis and may contain '
       'errors; do not rely on it for legal, medical, or safety-critical use. '
       'No-App (PSTN) calling is not yet available. See the full terms at '
-      'confrika.com/terms.';
+      'confrika.online/terms.';
 }
