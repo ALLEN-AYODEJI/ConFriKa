@@ -592,4 +592,61 @@ class ConFriKaApiClient {
         'product_id': productId,
         'token': token,
       })) as Map<String, dynamic>;
+
+  // ── Teach & Earn ────────────────────────────────────────────────────────
+  /// Browse teachers (native speakers), top-rated first. Non-Pro viewers get
+  /// blurred bios as an upgrade nudge.
+  Future<List<dynamic>> teachers({
+    String? q,
+    String? language,
+    int limit = 30,
+    int offset = 0,
+  }) async =>
+      (await _get('/api/v1/teachers', {
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+        if (language != null && language.trim().isNotEmpty) 'language': language.trim(),
+        'limit': limit,
+        'offset': offset,
+      })) as List<dynamic>;
+
+  /// A single teacher's page (full bio + `my_rating` for Pro viewers).
+  Future<Map<String, dynamic>> teacher(String username) async =>
+      (await _get('/api/v1/teachers/${Uri.encodeComponent(username)}'))
+          as Map<String, dynamic>;
+
+  /// Rate / confirm a teacher's pronunciation (Pro learners only).
+  Future<Map<String, dynamic>> rateTeacher(
+    String username, {
+    required int stars,
+    required bool confirmed,
+    String? comment,
+  }) async =>
+      (await _post('/api/v1/teachers/${Uri.encodeComponent(username)}/rate', {
+        'stars': stars,
+        'confirmed': confirmed,
+        if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+      })) as Map<String, dynamic>;
+
+  /// The signed-in user's teaching dashboard. `{is_teacher: false}` until they
+  /// create a profile.
+  Future<Map<String, dynamic>> myTeacherDashboard() async =>
+      (await _get('/api/v1/teachers/me')) as Map<String, dynamic>;
+
+  /// Become / update a teacher.
+  Future<Map<String, dynamic>> upsertTeacherProfile({
+    String? headline,
+    String? bio,
+    String? languages,
+    bool isActive = true,
+  }) async =>
+      (await _post('/api/v1/teachers/profile', {
+        if (headline != null) 'headline': headline,
+        if (bio != null) 'bio': bio,
+        if (languages != null) 'languages': languages,
+        'is_active': isActive,
+      })) as Map<String, dynamic>;
+
+  /// Request a payout of accumulated rewards (disbursement is Coming Soon).
+  Future<Map<String, dynamic>> requestTeacherWithdrawal() async =>
+      (await _post('/api/v1/teachers/me/withdraw', const {})) as Map<String, dynamic>;
 }

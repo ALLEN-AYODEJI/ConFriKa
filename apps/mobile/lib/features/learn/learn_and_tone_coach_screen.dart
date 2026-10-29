@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import '../../core/network/api_client.dart';
 import '../../core/session.dart';
 import '../../core/theme/confrika_theme.dart';
+import '../teach/teach_and_earn_screen.dart';
 
 class LearnAndToneCoachScreen extends StatefulWidget {
   const LearnAndToneCoachScreen({super.key});
@@ -105,6 +106,8 @@ class _LearnAndToneCoachScreenState extends State<LearnAndToneCoachScreen> {
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 14),
+          _teachAndEarnEntry(),
+          const SizedBox(height: 14),
           _languagePicker(),
           const SizedBox(height: 12),
           ..._pairs.map((p) => _TonePracticeCard(
@@ -119,6 +122,64 @@ class _LearnAndToneCoachScreenState extends State<LearnAndToneCoachScreen> {
             label: Text('Teach a word in $_language'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Entry point into the "learn from native speakers & earn" program.
+  Widget _teachAndEarnEntry() {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: ConFriKaColors.sunsetOrange.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      elevation: 0,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const TeachAndEarnScreen(),
+        )),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: ConFriKaColors.sunsetOrange,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Center(
+                  child: Icon(Icons.volunteer_activism, color: Colors.white, size: 22),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Teach & Earn',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                    SizedBox(height: 2),
+                    Text(
+                      'Learn from native speakers — or teach your language and earn.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const Text('Open →',
+                  style: TextStyle(
+                      color: ConFriKaColors.sunsetOrange,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12)),
+            ],
+          ),
+        ),
       ),
     );
   }

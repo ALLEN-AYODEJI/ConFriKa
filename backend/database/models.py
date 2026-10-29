@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -263,3 +264,65 @@ class TonalLearningRecord(Base):
     created_at = Column(DateTime, default=_utcnow)
 
     user = relationship("User", back_populates="tonal_records")
+
+
+class TeacherProfile(Base):
+    """A user's teaching profile for the 'learn from native speakers & earn' program."""
+
+    __tablename__ = "teacher_profiles"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True, nullable=False, index=True,
+    )
+    headline = Column(String(160), nullable=True)   # why learners should pick them
+    bio = Column(Text, nullable=True)
+    languages = Column(Text, nullable=True)          # comma-separated languages/dialects taught
+    is_active = Column(Boolean, default=True, nullable=False)    # accepting learners
+    is_verified = Column(Boolean, default=False, nullable=False)  # monetization/verified tag
+
+    rating_count = Column(Integer, default=0, nullable=False)
+    rating_sum = Column(Integer, default=0, nullable=False)       # sum of stars (avg = sum/count)
+    confirmed_count = Column(Integer, default=0, nullable=False)  # "pronunciation is correct" confirmations
+    reward_cents = Column(Integer, default=0, nullable=False)     # accumulated reward, minor units
+
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class TeacherRating(Base):
+    """One learner's rating/confirmation of a teacher (one per learner per teacher)."""
+
+    __tablename__ = "teacher_ratings"
+    __table_args__ = (
+        UniqueConstraint("teacher_user_id", "rater_user_id", name="uq_teacher_rater"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    teacher_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rater_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stars = Column(Integer, default=5, nullable=False)           # 1..5
+    confirmed = Column(Boolean, default=True, nullable=False)    # pronunciation is correct
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class WithdrawalRequest(Base):
+    """A teacher's request to cash out accumulated rewards (payouts: coming soon)."""
+
+    __tablename__ = "withdrawal_requests"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    teacher_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount_cents = Column(Integer, nullable=False)
+    status = Column(String(20), default="coming_soon", nullable=False)  # coming_soon|pending|paid
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)

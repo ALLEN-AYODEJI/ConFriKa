@@ -110,6 +110,14 @@ class Settings(BaseSettings):
     # server-side verification. MUST stay False in production.
     BILLING_TRUST_UNVERIFIED: bool = False
 
+    # ── Teach-and-earn: learn from native speakers, teachers earn rewards ──
+    # Rewards are a liability funded from app revenue (ads/Pro). Payouts are
+    # tracked now; actual disbursement ("withdraw") is Coming Soon.
+    TEACHER_REWARD_PER_CONFIRMATION_CENTS: int = 2   # base reward per confirmed rating
+    TEACHER_VERIFY_CONFIRMATIONS: int = 1000          # confirmations to get verified + monetized
+    TEACHER_REWARD_TIER_BONUS_CENTS: int = 1          # +per confirmation for each extra 1000
+    TEACHER_REWARD_CURRENCY: str = "USD"
+
     @property
     def play_configured(self) -> bool:
         return bool(self.PLAY_SERVICE_ACCOUNT_FILE and self.PLAY_PACKAGE_NAME)
