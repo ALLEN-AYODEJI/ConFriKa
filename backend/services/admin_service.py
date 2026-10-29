@@ -19,6 +19,7 @@ from ..database.models import (
     DeviceToken,
     DirectMessage,
     GlobalSpacesMessage,
+    RevenueEvent,
     TeacherProfile,
     User,
     WithdrawalRequest,
@@ -334,6 +335,40 @@ class AdminService:
             profile.reward_cents = max(0, profile.reward_cents - w.amount_cents)
         await db.commit()
         return {"id": withdrawal_id, "status": "paid"}
+
+    # ── Finance ───────────────────────────────────────────────────────────
+    @staticmethod
+    async def finance(db: AsyncSession) -> Dict[str, Any]:
+        """Platform money: total generated income (recognised revenue), total
+        paid to teachers, what is still owed, the available balance, and how many
+        Pro users drive it."""
+        cur = settings.REVENUE_CURRENCY
+        income = await db.scalar(
+            select(func.coalesce(func.sum(RevenueEvent.amount_cents), 0))
+        ) or 0
+        paid = await db.scalar(
+            select(func.coalesce(func.sum(WithdrawalRequest.amount_cents), 0))
+            .where(WithdrawalRequest.status == "paid")
+        ) or 0
+        owed = await db.scalar(
+            select(func.coalesce(func.sum(TeacherProfile.reward_cents), 0))
+        ) or 0
+        pro_users = await db.scalar(
+            select(func.count(User.id)).where(User.subscription_tier == "pro")
+        ) or 0
+        available = int(income) - int(paid)
+
+        def fmt(c: int) -> str:
+            return f"{(c or 0) / 100:.2f} {cur}"
+
+        return {
+            "currency": cur,
+            "total_income": fmt(income),
+            "paid_to_teachers": fmt(paid),
+            "owed_to_teachers": fmt(owed),
+            "available_balance": fmt(available),
+            "pro_users": int(pro_users),
+        }
 
     # ── Communities ───────────────────────────────────────────────────────
     @staticmethod

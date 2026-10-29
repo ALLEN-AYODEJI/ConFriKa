@@ -106,6 +106,11 @@ class Settings(BaseSettings):
     PLAY_PACKAGE_NAME: str = "com.confrika.confrika_mobile"
     PLAY_SERVICE_ACCOUNT_FILE: str = ""       # path to a Play service-account JSON
     PRO_PRODUCT_IDS: str = "confrika_pro_monthly,confrika_pro_yearly"
+    # Prices used to record revenue on each verified Pro purchase (set these to
+    # your real store prices). A product id containing "year" uses the yearly price.
+    PRO_MONTHLY_PRICE_CENTS: int = 299
+    PRO_YEARLY_PRICE_CENTS: int = 2999
+    REVENUE_CURRENCY: str = "USD"
     # Dev/testing escape hatch: trust the client's purchase claim without
     # server-side verification. MUST stay False in production.
     BILLING_TRUST_UNVERIFIED: bool = False

@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config.settings import settings
-from ..database.models import CommunityMembership, User
+from ..database.models import CommunityMembership, RevenueEvent, User
 from . import usage_service
 
 logger = logging.getLogger("confrika.billing")
@@ -260,6 +260,16 @@ async def verify_and_apply(
     user.subscription_product_id = product_id
     user.subscription_token = token
     user.subscription_expires_at = expires
+    # Record recognised revenue for this verified purchase (feeds admin Finance).
+    price = (
+        settings.PRO_YEARLY_PRICE_CENTS
+        if "year" in product_id.lower()
+        else settings.PRO_MONTHLY_PRICE_CENTS
+    )
+    db.add(RevenueEvent(
+        user_id=user.id, product_id=product_id, platform=platform,
+        amount_cents=int(price), currency=settings.REVENUE_CURRENCY,
+    ))
     await db.commit()
     await db.refresh(user)
     return await entitlements(db, user)

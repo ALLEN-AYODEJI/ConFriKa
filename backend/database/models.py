@@ -209,6 +209,22 @@ class MetricCounter(Base):
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class RevenueEvent(Base):
+    """One recognised revenue line (a verified Pro purchase). The sum is the
+    platform's total generated income; teacher payouts are deducted from it to
+    get the available balance (see the admin Finance section)."""
+
+    __tablename__ = "revenue_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    product_id = Column(String(60), nullable=True)
+    platform = Column(String(20), nullable=True)
+    amount_cents = Column(Integer, default=0, nullable=False)
+    currency = Column(String(8), default="USD")
+    created_at = Column(DateTime, default=_utcnow, index=True)
+
+
 class EmailVerification(Base):
     """A one-time email code for signup verification or password reset."""
 

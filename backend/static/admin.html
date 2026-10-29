@@ -140,6 +140,7 @@
       .kpi:nth-child(4n+4){background:linear-gradient(135deg,#C99A1F,#8a6a12)}
       .kpi .n{font-size:1.8rem;font-weight:800;line-height:1.1}
       .kpi .l{font-size:.7rem;opacity:.9;text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
+      #fin .kpi .n{font-size:1.45rem}
       /* Grouped KPI cards: two-up, flat number tiles inside each card. */
       .groups{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:18px}
       @media(max-width:760px){.groups{grid-template-columns:1fr}}
@@ -157,6 +158,7 @@
         <button class="navitem" data-sec="communities">Communities</button>
         <button class="navitem" data-sec="teachers">Teachers</button>
         <button class="navitem" data-sec="payouts">Payouts</button>
+        <button class="navitem" data-sec="finance">Finance</button>
         <button class="navitem" data-sec="moderation">Moderation</button>
       </aside>
       <div class="content">
@@ -234,6 +236,17 @@
           </div>
         </section>
 
+        <section class="sec" id="sec-finance">
+          <h1 class="sectitle">Finance</h1>
+          <div class="kpistrip" id="fin"></div>
+          <p class="muted" style="font-size:.82rem;margin-top:14px;max-width:70ch">
+            <b>Available balance</b> = total income − money paid to teachers.
+            Income is recognised from verified Pro purchases since revenue
+            tracking shipped; ad revenue and purchases made before then are not
+            included. "Owed to teachers" is the outstanding reward liability.
+          </p>
+        </section>
+
         <section class="sec" id="sec-communities">
           <h1 class="sectitle">Communities</h1>
           <div class="panel">
@@ -285,7 +298,7 @@ function showApp(me){
   document.getElementById('loginView').classList.add('hide');
   document.getElementById('appView').classList.remove('hide');
   document.getElementById('who').textContent = me.full_name || me.username;
-  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals(); loadCommunities(); loadModeration();
+  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals(); loadCommunities(); loadModeration(); loadFinance();
 }
 function initials(n){return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join().toUpperCase();}
 function _tiles(el, items, s){
@@ -327,6 +340,11 @@ function drawSignal(data){
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${gridY}${area('messages','#154C79')}${line('messages','#154C79')}${line('calls','#E87722')}${line('signups','#2D8A4E')}${labels}
     <text x="${P}" y="14" font-size="9" fill="var(--muted)">peak ${maxV}</text></svg>
     <div class="legend"><b style="color:#154C79">● Messages</b><b style="color:#E87722">● Calls</b><b style="color:#2D8A4E">● Signups</b></div>`;
+}
+async function loadFinance(){
+  const f = await api('/admin/finance');
+  const items=[['total_income','Total income'],['paid_to_teachers','Paid to teachers'],['owed_to_teachers','Owed to teachers'],['available_balance','Available balance'],['pro_users','Pro users']];
+  document.getElementById('fin').innerHTML = items.map(([k,l])=>`<div class="kpi"><div class="n">${f[k]??'—'}</div><div class="l">${l}</div></div>`).join('');
 }
 async function loadCommunities(){
   const list = await api('/admin/communities');

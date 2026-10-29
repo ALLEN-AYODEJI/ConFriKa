@@ -100,6 +100,15 @@ async def mark_withdrawal_paid(
     return await AdminService.mark_withdrawal_paid(db, withdrawal_id)
 
 
+# ── Finance ──────────────────────────────────────────────────────────────────
+@router.get("/finance")
+async def finance(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.finance(db)
+
+
 # ── Communities ──────────────────────────────────────────────────────────────
 @router.get("/communities")
 async def list_communities(

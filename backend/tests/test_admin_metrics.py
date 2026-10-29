@@ -66,6 +66,18 @@ async def test_metrics_beacon_counts_and_surfaces_in_stats():
 
 
 @pytest.mark.asyncio
+async def test_admin_finance_shape():
+    async with await _client() as c:
+        f = (await c.get("/api/v1/admin/finance")).json()
+        for k in ["total_income", "paid_to_teachers", "owed_to_teachers",
+                  "available_balance", "pro_users", "currency"]:
+            assert k in f
+        assert f["pro_users"] == 0
+        # Money fields are formatted "<amount> <CUR>".
+        assert f["total_income"].endswith(f["currency"])
+
+
+@pytest.mark.asyncio
 async def test_admin_communities_and_recent_content():
     async with await _client() as c:
         assert (await c.get("/api/v1/admin/communities")).status_code == 200
