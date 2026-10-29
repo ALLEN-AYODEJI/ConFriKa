@@ -326,6 +326,26 @@ class ConFriKaApiClient {
     }
   }
 
+  // ── Sign-language accessibility ───────────────────────────────────────
+  /// The sign vocabulary: supported sign languages, alphabets, and the curated
+  /// phrase palette (each with `token`, `text`, `auto`).
+  Future<Map<String, dynamic>> signVocabulary() async =>
+      (await _get('/api/v1/sign/vocabulary')) as Map<String, dynamic>;
+
+  /// Recognize a short burst of hand-landmark frames as a sign token.
+  /// [frames] = list of frames; each frame `{hands: [[{x,y,z}, ... 21 ...]]}`.
+  /// Used by the browser extension and future on-device hand tracking.
+  Future<Map<String, dynamic>> recognizeSign({
+    required List<Map<String, dynamic>> frames,
+    String alphabet = 'letters',
+    String signLanguage = 'ASL',
+  }) async =>
+      (await _post('/api/v1/sign/recognize', {
+        'frames': frames,
+        'alphabet': alphabet,
+        'sign_language': signLanguage,
+      })) as Map<String, dynamic>;
+
   // ── Contacts ──────────────────────────────────────────────────────────
   Future<List<dynamic>> contacts() async =>
       (await _get('/api/v1/contacts')) as List<dynamic>;

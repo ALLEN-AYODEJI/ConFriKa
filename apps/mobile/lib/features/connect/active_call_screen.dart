@@ -12,9 +12,12 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../core/config.dart';
 import '../../core/network/api_client.dart';
+import '../../core/services/callkit_service.dart';
 import '../../core/services/webrtc_service.dart';
 import '../../core/session.dart';
 import '../../core/theme/confrika_theme.dart';
+import '../sign/sign_composer.dart';
+import '../sign/sign_speech_service.dart';
 import 'voice_enroll_screen.dart';
 
 enum CallPhase { dialing, ringing, incoming, connected, ended, failed }
@@ -62,6 +65,11 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   String _targetLang = 'English';
   String? _caption;
 
+  // Sign-to-speak panel (lets a Deaf/non-speaking caller voice signs into the
+  // call). Spoken on the loudspeaker so the other party hears it.
+  bool _showSign = false;
+  String? _signCaption;
+
   String? _sessionId;
   bool _wasConnected = false;
   bool _outcomeSent = false;
@@ -100,6 +108,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _tick?.cancel();
     _rec.dispose();
     _player.dispose();
+    SignSpeechService.instance.stop();
     _cleanup();
     super.dispose();
   }
@@ -159,6 +168,12 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
 
   Future<void> _startOutgoing() async {
     if (!await _ensureMic()) return;
+    // The caller must never hear a ring: clear any stray native CallKit screen
+    // (e.g. a self-delivered call push on the same device) so no system
+    // ringtone plays on our end while we dial out.
+    try {
+      await ConFriKaCallKitService().endAllCalls();
+    } catch (_) {}
     try {
       final session = await _api.initiateCall(_peer);
       _sessionId = session['session_id'] as String?;
@@ -337,6 +352,24 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     setState(() => _showTranslate = !_showTranslate);
   }
 
+  Future<void> _toggleSign() async {
+    final opening = !_showSign;
+    setState(() {
+      _showSign = opening;
+      if (opening) _showTranslate = false;
+    });
+    // Route audio to the loudspeaker so the spoken sign reaches the other party
+    // through the open microphone.
+    if (opening && !_speaker) {
+      await _toggleSpeaker();
+    }
+  }
+
+  void _speakSign(String text) {
+    setState(() => _signCaption = text);
+    SignSpeechService.instance.speak(text);
+  }
+
   String get _statusText {
     switch (_phase) {
       case CallPhase.dialing:
@@ -407,6 +440,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                       fontWeight: FontWeight.w500)),
               const Spacer(),
               if (_showTranslate) _translatePanel(),
+              if (_showSign) _signPanel(),
               _controls(),
               const SizedBox(height: 40),
             ],
@@ -479,6 +513,68 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     );
   }
 
+  Widget _signPanel() {
+    final maxH = MediaQuery.of(context).size.height * 0.46;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.sign_language, size: 16, color: Colors.white70),
+                  SizedBox(width: 6),
+                  Text('Sign to speak',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14)),
+                ],
+              ),
+              if (_signCaption != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('🔊 $_signCaption',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 14)),
+                ),
+              ],
+              const SizedBox(height: 10),
+              SignComposer(
+                dark: true,
+                onSpeak: _speakSign,
+                speakLabel: 'Speak into call',
+                speakIcon: Icons.volume_up,
+                compact: true,
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Beta · spoken on speakerphone so the other person hears it',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _controls() {
     if (_phase == CallPhase.incoming) {
       return Row(
@@ -531,6 +627,13 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                 iconColor: _showTranslate ? Colors.black : Colors.white,
                 label: 'Translate',
                 onTap: _openTranslate,
+              ),
+              _RoundButton(
+                icon: Icons.sign_language,
+                color: _showSign ? Colors.white : Colors.white24,
+                iconColor: _showSign ? Colors.black : Colors.white,
+                label: 'Sign',
+                onTap: _toggleSign,
               ),
             ],
           ),

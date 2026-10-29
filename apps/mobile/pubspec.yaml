@@ -28,6 +28,12 @@ dependencies:
   emoji_picker_flutter: ^4.3.0
   in_app_purchase: ^3.3.0
   google_mobile_ads: ^9.0.0
+  # Sign-language accessibility (Sign Mode): front-camera self-view so the user
+  # watches their own signing, device text-to-speech to voice signed phrases,
+  # and on-device speech-to-text to caption the hearing person.
+  camera: ^0.11.0+2
+  flutter_tts: ^4.2.0
+  speech_to_text: ^7.0.0
 
 dev_dependencies:
   flutter_test:

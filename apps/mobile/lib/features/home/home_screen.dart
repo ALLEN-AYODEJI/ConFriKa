@@ -10,6 +10,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onOpenGlobalSpaces;
   final VoidCallback onOpenToneCoach;
   final VoidCallback onOpenTranslate;
+  final VoidCallback onOpenSignMode;
   final ValueChanged<String> onStartCall;
   final ValueChanged<Map<String, dynamic>>? onOpenDirectMessage;
 
@@ -18,6 +19,7 @@ class HomeScreen extends StatefulWidget {
     required this.onOpenGlobalSpaces,
     required this.onOpenToneCoach,
     required this.onOpenTranslate,
+    required this.onOpenSignMode,
     required this.onStartCall,
     this.onOpenDirectMessage,
   });
@@ -638,6 +640,90 @@ class _HomeScreenState extends State<HomeScreen> {
                       'Join →',
                       style: TextStyle(
                         color: ConFriKaColors.oceanBlue,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ================= 2b. SIGN MODE (ACCESSIBILITY) CARD =================
+          Card(
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: ConFriKaColors.savannaGreen.withValues(alpha: 0.30),
+                width: 1.5,
+              ),
+            ),
+            elevation: 0,
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            child: InkWell(
+              onTap: widget.onOpenSignMode,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: ConFriKaColors.savannaGreen,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Center(
+                        child: Text('🤟', style: TextStyle(fontSize: 20)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'Sign Mode',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: ConFriKaColors.savannaGreen.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Accessible',
+                                  style: TextStyle(
+                                    color: ConFriKaColors.savannaGreen,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Sign to speak aloud · caption what others say',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Text(
+                      'Open →',
+                      style: TextStyle(
+                        color: ConFriKaColors.savannaGreen,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
                       ),

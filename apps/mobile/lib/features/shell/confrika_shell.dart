@@ -17,6 +17,7 @@ import '../home/home_screen.dart';
 import '../learn/learn_and_tone_coach_screen.dart';
 import '../messages/direct_messages_screen.dart';
 import '../profile/profile_and_trust_screen.dart';
+import '../sign/sign_mode_screen.dart';
 import '../spaces/communities_screen.dart';
 import '../translate/translate_screen.dart';
 
@@ -135,6 +136,14 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
     ));
   }
 
+  /// Opens the Sign Mode accessibility screen (split-screen signer for
+  /// Deaf / non-speaking users).
+  void _openSignMode() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const SignModeScreen(),
+    ));
+  }
+
   void _openDirectMessage(Map<String, dynamic> contact) {
     setState(() {
       _currentIndex = 1; // Switches to the private Chats (Direct Messages) tab
@@ -171,6 +180,7 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
         onOpenGlobalSpaces: _openGlobalSpaces,
         onOpenToneCoach: () => setState(() => _currentIndex = 3),
         onOpenTranslate: () => setState(() => _currentIndex = 4),
+        onOpenSignMode: _openSignMode,
         onStartCall: _startCall,
         onOpenDirectMessage: _openDirectMessage,
       ),

@@ -7,6 +7,10 @@
 
     <!-- Audio Recording & WebRTC Real-Time Audio -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <!-- Sign Mode: front-camera self-view so Deaf/non-speaking users watch
+         their own signing. The camera feature stays optional (declared below). -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
@@ -28,6 +32,14 @@
     <uses-feature android:name="android.hardware.microphone" android:required="true"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+
+    <!-- Sign Mode speech-to-text: lets the app see the device's speech
+         recognition service on Android 11+ (package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
+    </queries>
 
     <application
         android:label="ConFriKa"
