@@ -71,6 +71,7 @@ class _ConFriKaShellState extends State<ConFriKaShell> {
     // Load the user's plan (free/Pro) so ads + feature gates reflect reality.
     EntitlementService.instance.refresh();
     BillingService.instance.init();
+    _api.recordAppOpen(); // reach metric (best-effort)
   }
 
   /// Register this device for push notifications and route incoming-call pushes

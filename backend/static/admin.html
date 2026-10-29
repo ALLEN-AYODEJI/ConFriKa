@@ -122,18 +122,30 @@
       .navitem.active{background:var(--ocean);color:#fff;border-color:transparent}
       .sec{display:none} .sec.active{display:block}
       .sectitle{font-size:1.35rem;font-weight:800;margin:0 0 16px}
+      .grouplabel{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;
+        color:var(--muted);margin:20px 0 8px}
+      .tile .note{font-size:.66rem;color:var(--muted);margin-top:4px}
     </style>
     <div class="shell">
       <aside class="side">
         <button class="navitem active" data-sec="overview">Overview</button>
         <button class="navitem" data-sec="users">Users</button>
+        <button class="navitem" data-sec="communities">Communities</button>
         <button class="navitem" data-sec="teachers">Teachers</button>
         <button class="navitem" data-sec="payouts">Payouts</button>
+        <button class="navitem" data-sec="moderation">Moderation</button>
       </aside>
       <div class="content">
         <section class="sec active" id="sec-overview">
           <h1 class="sectitle">Overview</h1>
-          <div class="tiles" id="tiles"></div>
+          <div class="grouplabel">People</div>
+          <div class="tiles" id="t-people"></div>
+          <div class="grouplabel">Activity</div>
+          <div class="tiles" id="t-activity"></div>
+          <div class="grouplabel">Reach</div>
+          <div class="tiles" id="t-reach"></div>
+          <div class="grouplabel">Teach &amp; Earn &amp; content</div>
+          <div class="tiles" id="t-teach"></div>
           <div class="panel">
             <h2><span class="dot"></span>Users by country</h2>
             <div id="countries"></div>
@@ -166,6 +178,22 @@
           <h1 class="sectitle">Payout requests</h1>
           <div class="panel">
             <div id="withdrawals"></div>
+          </div>
+        </section>
+
+        <section class="sec" id="sec-communities">
+          <h1 class="sectitle">Communities</h1>
+          <div class="panel">
+            <table><thead><tr><th>Community</th><th>Category</th><th>Members</th><th>Posts</th></tr></thead>
+            <tbody id="communities"></tbody></table>
+          </div>
+        </section>
+
+        <section class="sec" id="sec-moderation">
+          <h1 class="sectitle">Moderation</h1>
+          <div class="panel">
+            <h2><span class="dot"></span>Recent public posts</h2>
+            <div id="content"></div>
           </div>
         </section>
       </div>
@@ -204,19 +232,36 @@ function showApp(me){
   document.getElementById('loginView').classList.add('hide');
   document.getElementById('appView').classList.remove('hide');
   document.getElementById('who').textContent = me.full_name || me.username;
-  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals();
+  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals(); loadCommunities(); loadModeration();
 }
 function initials(n){return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join().toUpperCase();}
+function _tiles(el, items, s){
+  document.getElementById(el).innerHTML = items.map(([k,l,c,note])=>
+    `<div class="tile ${c}"><div class="n">${s[k]??0}</div><div class="l">${l}</div>${note?`<div class="note">${note}</div>`:''}</div>`).join('');
+}
 async function loadStats(){
   const s = await api('/admin/stats');
-  const tiles=[['total_users','Total users','a'],['verified_users','Verified','b'],['banned_users','Banned','d'],
-    ['total_countries','Countries','a'],['total_communities','Communities','c'],['direct_messages','Direct msgs','a'],['global_messages','Global msgs','b'],
-    ['teachers','Teachers','c'],['verified_teachers','Verified teachers','b'],['reward_owed','Rewards owed','c'],['pending_withdrawals','Pending payouts','d']];
-  document.getElementById('tiles').innerHTML = tiles.map(([k,l,c])=>`<div class="tile ${c}"><div class="n">${s[k]??0}</div><div class="l">${l}</div></div>`).join('');
+  _tiles('t-people', [['total_users','Total users','a'],['verified_users','Verified','b'],['banned_users','Banned','d'],['total_countries','Countries','a']], s);
+  _tiles('t-activity', [['new_users_24h','New users · 24h','b'],['new_users_7d','New users · 7d','a'],['messages_24h','Messages · 24h','c'],['calls_total','Calls · all time','a']], s);
+  _tiles('t-reach', [['web_pageviews','Website views','a'],['app_opens','App opens','b'],['ext_opens','Extension opens','c'],['registered_devices','Installs','a','registered devices']], s);
+  _tiles('t-teach', [['teachers','Teachers','c'],['verified_teachers','Verified','b'],['reward_owed','Rewards owed','c'],['pending_withdrawals','Pending payouts','d'],['total_communities','Communities','a'],['direct_messages','Direct msgs','a'],['global_messages','Global msgs','b']], s);
   const max = Math.max(1, ...s.users_by_country.map(c=>c.count));
   document.getElementById('countries').innerHTML = s.users_by_country.map(c=>
     `<div class="cc"><div class="t"><span>${c.country||'—'}</span><b>${c.count}</b></div><div class="bar"><i style="width:${c.count/max*100}%"></i></div></div>`
   ).join('') || '<p class="muted">No data yet</p>';
+}
+async function loadCommunities(){
+  const list = await api('/admin/communities');
+  document.getElementById('communities').innerHTML = list.map(c=>
+    `<tr><td><div class="u"><div><b>${c.icon||''} ${c.name}</b>${c.is_default?' <span class="pill adm">Default</span>':''}<div class="em">${c.slug}</div></div></div></td><td>${c.category||''}</td><td>${c.members}</td><td>${c.posts}</td></tr>`
+  ).join('') || '<tr><td colspan="4" class="muted">No communities yet</td></tr>';
+}
+function esc(t){return (t||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+async function loadModeration(){
+  const list = await api('/admin/content/recent');
+  document.getElementById('content').innerHTML = list.map(m=>
+    `<div class="cc"><div class="t"><span><b>${m.username}</b> · ${m.channel}</span><span class="muted">${(m.created_at||'').slice(0,16).replace('T',' ')}</span></div><div>${esc(m.text)}</div></div>`
+  ).join('') || '<p class="muted">No public posts yet</p>';
 }
 async function loadUsers(){
   const q = document.getElementById('q').value.trim();

@@ -4,6 +4,7 @@ Admin access is granted to accounts whose email is in ADMIN_EMAILS (applied on
 startup) and enforced by `require_admin`."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, HTTPException, status
@@ -12,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config.settings import settings
 from ..database.models import (
+    CallSession,
     Community,
+    CommunityMembership,
+    DeviceToken,
     DirectMessage,
     GlobalSpacesMessage,
     TeacherProfile,
@@ -21,6 +25,7 @@ from ..database.models import (
 )
 from ..database.session import get_db
 from ..api.v1.auth import get_current_user
+from .metrics_service import MetricsService
 
 
 def _money(cents: int) -> str:
@@ -92,6 +97,29 @@ class AdminService:
                 WithdrawalRequest.status != "paid"
             )
         ) or 0
+        # ── Activity (time-based) ─────────────────────────────────────────
+        now = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC, matching the columns
+        day_ago = now - timedelta(days=1)
+        week_ago = now - timedelta(days=7)
+        new_users_24h = await db.scalar(
+            select(func.count(User.id)).where(User.created_at >= day_ago)
+        ) or 0
+        new_users_7d = await db.scalar(
+            select(func.count(User.id)).where(User.created_at >= week_ago)
+        ) or 0
+        dm_24h = await db.scalar(
+            select(func.count(DirectMessage.id)).where(DirectMessage.created_at >= day_ago)
+        ) or 0
+        gm_24h = await db.scalar(
+            select(func.count(GlobalSpacesMessage.id)).where(
+                GlobalSpacesMessage.created_at >= day_ago
+            )
+        ) or 0
+        calls_total = await db.scalar(select(func.count(CallSession.id))) or 0
+        # ── Reach ─────────────────────────────────────────────────────────
+        # Registered devices (FCM tokens) is a real proxy for installs.
+        devices = await db.scalar(select(func.count(DeviceToken.id))) or 0
+        reach = await MetricsService.snapshot(db)  # web_pageview / app_open / ext_open
         return {
             "total_users": total_users,
             "verified_users": verified,
@@ -105,6 +133,16 @@ class AdminService:
             "verified_teachers": verified_teachers,
             "reward_owed": _money(reward_owed_cents),
             "pending_withdrawals": pending_withdrawals,
+            # activity
+            "new_users_24h": new_users_24h,
+            "new_users_7d": new_users_7d,
+            "messages_24h": int(dm_24h) + int(gm_24h),
+            "calls_total": calls_total,
+            # reach
+            "registered_devices": devices,
+            "web_pageviews": reach["web_pageview"],
+            "app_opens": reach["app_open"],
+            "ext_opens": reach["ext_open"],
         }
 
     @staticmethod
@@ -250,3 +288,64 @@ class AdminService:
             profile.reward_cents = max(0, profile.reward_cents - w.amount_cents)
         await db.commit()
         return {"id": withdrawal_id, "status": "paid"}
+
+    # ── Communities ───────────────────────────────────────────────────────
+    @staticmethod
+    async def list_communities(db: AsyncSession) -> List[Dict[str, Any]]:
+        total_users = await db.scalar(select(func.count(User.id))) or 0
+        mem_rows = (
+            await db.execute(
+                select(CommunityMembership.community_slug, func.count())
+                .group_by(CommunityMembership.community_slug)
+            )
+        ).all()
+        members = {slug: n for slug, n in mem_rows}
+        post_rows = (
+            await db.execute(
+                select(GlobalSpacesMessage.channel_category, func.count())
+                .group_by(GlobalSpacesMessage.channel_category)
+            )
+        ).all()
+        posts = {slug: n for slug, n in post_rows}
+        rows = (
+            await db.scalars(
+                select(Community).order_by(Community.is_default.desc(), Community.created_at.asc())
+            )
+        ).all()
+        return [
+            {
+                "slug": c.slug,
+                "name": c.name,
+                "icon": c.icon,
+                "category": c.category,
+                "is_default": c.is_default,
+                # Everyone belongs to a default community; others count memberships.
+                "members": total_users if c.is_default else members.get(c.slug, 0),
+                "posts": posts.get(c.slug, 0),
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in rows
+        ]
+
+    # ── Content moderation ────────────────────────────────────────────────
+    @staticmethod
+    async def recent_content(db: AsyncSession, limit: int = 40) -> List[Dict[str, Any]]:
+        """Most recent public (Global Spaces) posts, for at-a-glance moderation."""
+        rows = (
+            await db.scalars(
+                select(GlobalSpacesMessage)
+                .order_by(GlobalSpacesMessage.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        return [
+            {
+                "username": m.sender_username,
+                "name": m.sender_name,
+                "channel": m.channel_category,
+                "type": m.message_type,
+                "text": m.original_text,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in rows
+        ]

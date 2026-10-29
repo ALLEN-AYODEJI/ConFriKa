@@ -98,3 +98,22 @@ async def mark_withdrawal_paid(
     db: AsyncSession = Depends(get_db),
 ):
     return await AdminService.mark_withdrawal_paid(db, withdrawal_id)
+
+
+# ── Communities ──────────────────────────────────────────────────────────────
+@router.get("/communities")
+async def list_communities(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.list_communities(db)
+
+
+# ── Content moderation ───────────────────────────────────────────────────────
+@router.get("/content/recent")
+async def recent_content(
+    limit: int = Query(40, ge=1, le=200),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminService.recent_content(db, limit)

@@ -11,6 +11,7 @@ from .admin import router as admin_router
 from .billing import router as billing_router
 from .teachers import router as teachers_router
 from .sign import router as sign_router
+from .metrics import router as metrics_router
 
 v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(auth_router)
@@ -25,5 +26,6 @@ v1_router.include_router(admin_router)
 v1_router.include_router(billing_router)
 v1_router.include_router(teachers_router)
 v1_router.include_router(sign_router)
+v1_router.include_router(metrics_router)
 
 __all__ = ["v1_router"]

@@ -326,6 +326,16 @@ class ConFriKaApiClient {
     }
   }
 
+  // ── Reach metric (app open) ───────────────────────────────────────────
+  /// Best-effort: count one app open for the admin dashboard. Never throws.
+  Future<void> recordAppOpen() async {
+    try {
+      await http
+          .post(_uri('/api/v1/metrics/hit', {'kind': 'app_open'}), headers: _headers)
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {/* fire-and-forget */}
+  }
+
   // ── Sign-language accessibility ───────────────────────────────────────
   /// The sign vocabulary: supported sign languages, alphabets, and the curated
   /// phrase palette (each with `token`, `text`, `auto`).

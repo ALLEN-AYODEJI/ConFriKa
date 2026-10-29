@@ -198,6 +198,17 @@ class DeviceToken(Base):
     created_at = Column(DateTime, default=_utcnow)
 
 
+class MetricCounter(Base):
+    """A simple named event counter (e.g. web_pageview, app_open, ext_open) for
+    the admin dashboard's reach metrics. Incremented by a public beacon."""
+
+    __tablename__ = "metric_counters"
+
+    name = Column(String(40), primary_key=True)
+    count = Column(Integer, default=0, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class EmailVerification(Base):
     """A one-time email code for signup verification or password reset."""
 

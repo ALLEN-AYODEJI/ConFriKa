@@ -1,6 +1,15 @@
 import { HandLandmarker, FilesetResolver } from './vendor/vision_bundle.mjs';
 import { classifyHand, PHRASE_CATALOG } from './recognizer.js';
 
+// Reach metric: count one extension open per browser session (fire-and-forget).
+try {
+  if (!sessionStorage.getItem('cf_ext')) {
+    sessionStorage.setItem('cf_ext', '1');
+    fetch('https://confrika-backend.fly.dev/api/v1/metrics/hit?kind=ext_open',
+      { method: 'POST', mode: 'no-cors', keepalive: true }).catch(() => {});
+  }
+} catch (e) { /* ignore */ }
+
 // ── DOM ──────────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const video = $('video');
