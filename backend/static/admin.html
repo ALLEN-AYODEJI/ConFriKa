@@ -129,6 +129,17 @@
       @media(max-width:620px){.row2{grid-template-columns:1fr}}
       .legend{display:flex;gap:14px;font-size:.78rem;margin-top:6px;flex-wrap:wrap}
       .legend b{font-weight:800}
+      .panel{margin-bottom:0}
+      .chartcard{margin-bottom:18px}
+      /* Grouped KPI cards: two-up, flat number tiles inside each card. */
+      .groups{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:18px}
+      @media(max-width:760px){.groups{grid-template-columns:1fr}}
+      .group{background:var(--card);border:1px solid var(--line);border-radius:16px;
+        padding:16px 18px;box-shadow:var(--shadow)}
+      .group .grouplabel{margin:0 0 12px}
+      .group .tiles{margin:0;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+      .group .tile{background:transparent;border:0;box-shadow:none;padding:4px 2px}
+      .group .tile .n{font-size:1.7rem}
     </style>
     <div class="shell">
       <aside class="side">
@@ -142,18 +153,34 @@
       <div class="content">
         <section class="sec active" id="sec-overview">
           <h1 class="sectitle">Overview</h1>
-          <div class="grouplabel">People</div>
-          <div class="tiles" id="t-people"></div>
-          <div class="grouplabel">Activity</div>
-          <div class="tiles" id="t-activity"></div>
-          <div class="grouplabel">Reach</div>
-          <div class="tiles" id="t-reach"></div>
-          <div class="grouplabel">Teach &amp; Earn &amp; content</div>
-          <div class="tiles" id="t-teach"></div>
-          <div class="panel">
+
+          <!-- Daily usage chart up top -->
+          <div class="panel chartcard">
             <h2><span class="dot"></span>Daily usage · last 14 days</h2>
             <div id="signal"></div>
           </div>
+
+          <!-- Key figures, grouped -->
+          <div class="groups">
+            <div class="group">
+              <div class="grouplabel">People</div>
+              <div class="tiles" id="t-people"></div>
+            </div>
+            <div class="group">
+              <div class="grouplabel">Activity</div>
+              <div class="tiles" id="t-activity"></div>
+            </div>
+            <div class="group">
+              <div class="grouplabel">Reach</div>
+              <div class="tiles" id="t-reach"></div>
+            </div>
+            <div class="group">
+              <div class="grouplabel">Teach &amp; Earn &amp; content</div>
+              <div class="tiles" id="t-teach"></div>
+            </div>
+          </div>
+
+          <!-- Geographic breakdown -->
           <div class="row2">
             <div class="panel">
               <h2><span class="dot"></span>Users by country</h2>
