@@ -34,6 +34,9 @@ dependencies:
   camera: ^0.11.0+2
   flutter_tts: ^4.2.0
   speech_to_text: ^7.0.0
+  # Live-camera sign recognition runs MediaPipe Hands in an in-app WebView
+  # (loaded from CDN) and posts recognized words back to Flutter.
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:
@@ -45,3 +48,4 @@ flutter:
   assets:
     - assets/images/confrika_logo_full.png
     - assets/images/confrika_app_icon.png
+    - assets/sign/live_sign.html

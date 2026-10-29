@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ConFrika Live Sign</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;
+    font-family:system-ui,-apple-system,Roboto,Arial,sans-serif;color:#fff}
+  #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  #token{position:absolute;right:12px;bottom:12px;min-width:56px;text-align:center;
+    background:rgba(0,0,0,.5);font-size:2rem;font-weight:800;padding:8px 14px;
+    border-radius:14px;font-family:ui-monospace,monospace}
+  #status{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.5);
+    font-size:.8rem;font-weight:700;padding:5px 10px;border-radius:999px;display:flex;gap:6px;align-items:center}
+  #status .dot{width:8px;height:8px;border-radius:50%;background:#ef4444}
+  #status.on .dot{background:#22c55e}
+  #hint{position:absolute;left:0;right:0;bottom:0;padding:22px 12px 10px;text-align:center;
+    font-size:.78rem;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+</style>
+</head>
+<body>
+<video id="video" autoplay playsinline muted></video>
+<div id="status"><span class="dot"></span><span id="statusText">Starting…</span></div>
+<div id="token">·</div>
+<div id="hint">Sign a letter and hold briefly. Lower your hand to finish a word.</div>
+
+<script type="module">
+import { HandLandmarker, FilesetResolver } from
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs';
+
+// ── Geometric ASL recognizer (identical logic to the backend + the extension) ──
+const WRIST=0, MIDDLE_MCP=9, INDEX_MCP=5, THUMB_TIP=4, THUMB_IP=3;
+const TIPS={index:8,middle:12,ring:16,pinky:20}, PIPS={index:6,middle:10,ring:14,pinky:18};
+const PATTERNS=new Map([
+  ['0,0,0,0,0',['A','0',0.70]],['1,0,0,0,0',['A','10',0.68]],['0,1,0,0,0',['D','1',0.90]],
+  ['0,1,1,0,0',['V','2',0.90]],['1,1,1,0,0',['3','3',0.82]],['0,1,1,1,0',['W','3',0.88]],
+  ['0,1,1,1,1',['B','4',0.90]],['1,1,1,1,1',['5','5',0.92]],['1,1,0,0,0',['L','L',0.93]],
+  ['1,0,0,0,1',['Y','Y',0.92]],['0,0,0,0,1',['I','I',0.90]],['0,1,0,0,1',['ILY','ILY',0.80]],
+  ['1,1,0,0,1',['ILY','ILY',0.90]],
+]);
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,(a.z||0)-(b.z||0));
+const ext=(h,t,p,w,s)=>s>1e-6 && (dist(h[t],w)-dist(h[p],w))>0.12*s;
+function thumb(h,w,s){ if(s<=1e-6) return false;
+  const far=dist(h[THUMB_TIP],w)-dist(h[THUMB_IP],w)>0.03*s;
+  const away=dist(h[THUMB_TIP],h[INDEX_MCP])>0.55*s; return far&&away; }
+function classify(hand){ if(!hand||hand.length<21) return null;
+  const w=hand[WRIST], s=dist(w,hand[MIDDLE_MCP]); if(s<=1e-6) return null;
+  const pat=[thumb(hand,w,s)?1:0, ext(hand,TIPS.index,PIPS.index,w,s)?1:0,
+    ext(hand,TIPS.middle,PIPS.middle,w,s)?1:0, ext(hand,TIPS.ring,PIPS.ring,w,s)?1:0,
+    ext(hand,TIPS.pinky,PIPS.pinky,w,s)?1:0].join(',');
+  const m=PATTERNS.get(pat); if(!m) return null;
+  const [letter,,conf]=m;
+  if(letter==='ILY') return {token:'ILY',label:'I love you',kind:'phrase',conf};
+  return {token:letter,label:letter,kind:'letter',conf};
+}
+
+// ── Bridge to Flutter ────────────────────────────────────────────────────────
+function send(type,value){
+  try{ if(window.flutter_inappwebview) window.flutter_inappwebview.callHandler('sign',{type,value}); }catch(e){}
+}
+const statusEl=document.getElementById('status');
+const statusText=document.getElementById('statusText');
+const tokenEl=document.getElementById('token');
+const video=document.getElementById('video');
+
+// ── Commit loop (same stability + word-break logic as the extension) ──────────
+const BUFFER=10, COMMIT=0.6, WORD_BREAK=12;
+let buffer=[], word='', last=null, unrec=0, noHand=0, running=false, busy=false, landmarker=null;
+const push=t=>{ buffer.push(t); if(buffer.length>BUFFER) buffer.shift(); };
+function dominant(){ const c=new Map(); for(const t of buffer) if(t) c.set(t,(c.get(t)||0)+1);
+  let best=null,n=0; for(const [t,k] of c) if(k>n){n=k;best=t;} return {token:best,share:n/BUFFER}; }
+function finalizeWord(){ if(word){ send('word',word); word=''; } }
+function commit(c){ if(c.kind==='phrase'){ finalizeWord(); send('word',c.label); } else { word+=c.token; } last=c.token; }
+
+function loop(){
+  if(!running) return;
+  requestAnimationFrame(loop);
+  if(busy||video.readyState<2) return;
+  busy=true;
+  try{
+    const res=landmarker.detectForVideo(video,performance.now());
+    const hand=res.landmarks&&res.landmarks[0];
+    if(!hand){ noHand++; unrec=0; push(null); tokenEl.textContent='·';
+      if(noHand===WORD_BREAK&&(word||last)){ finalizeWord(); last=null; } }
+    else{ noHand=0; const c=classify(hand);
+      if(!c){ unrec++; push(null); tokenEl.textContent='…'; if(unrec>=4) last=null; }
+      else{ unrec=0; push(c.token); tokenEl.textContent=c.kind==='phrase'?'🤟':c.token;
+        const d=dominant();
+        if(d.token===c.token && d.share>=COMMIT && c.token!==last) commit(c);
+      } }
+  }catch(e){} finally{ busy=false; }
+}
+
+async function start(){
+  try{
+    statusText.textContent='Loading model…';
+    const fileset=await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
+    landmarker=await HandLandmarker.createFromOptions(fileset,{
+      baseOptions:{modelAssetPath:
+        'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'},
+      numHands:1, runningMode:'VIDEO'});
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+    video.srcObject=stream; await video.play();
+    running=true; statusEl.classList.add('on'); statusText.textContent='Reading your signs';
+    send('ready',true);
+    requestAnimationFrame(loop);
+  }catch(e){
+    statusText.textContent='Camera/model error';
+    send('error', String(e&&e.message||e));
+  }
+}
+start();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../core/theme/confrika_theme.dart';
+import 'live_sign_view.dart';
 import 'sign_composer.dart';
 import 'sign_speech_service.dart';
 
@@ -39,6 +40,10 @@ class _SignModeScreenState extends State<SignModeScreen>
 
   final List<_Turn> _turns = [];
   final _scroll = ScrollController();
+
+  // Live-camera mode: MediaPipe recognition in an in-app WebView.
+  bool _live = false;
+  String _liveMsg = '';
 
   @override
   void initState() {
@@ -163,6 +168,34 @@ class _SignModeScreenState extends State<SignModeScreen>
   void _onSign(String text) {
     _addTurn(_Turn(true, text));
     SignSpeechService.instance.speak(text);
+  }
+
+  /// Switch between the keyboard composer and live-camera recognition. The two
+  /// can't use the camera at once, so the plugin preview is released when the
+  /// WebView takes over, and re-initialised when we come back.
+  Future<void> _setLive(bool on) async {
+    if (on) {
+      await _cam?.dispose();
+      _cam = null;
+      if (mounted) setState(() { _camReady = false; _live = true; _liveMsg = ''; });
+    } else {
+      if (mounted) setState(() => _live = false);
+      _initCamera();
+    }
+  }
+
+  void _onLiveWord(String w) {
+    final word = w.trim();
+    if (word.isEmpty) return;
+    setState(() => _liveMsg = _liveMsg.isEmpty ? word : '$_liveMsg $word');
+    SignSpeechService.instance.speak(word); // speak each finished word, fast
+  }
+
+  void _sendLiveToConversation() {
+    final t = _liveMsg.trim();
+    if (t.isEmpty) return;
+    _addTurn(_Turn(true, t));
+    setState(() => _liveMsg = '');
   }
 
   void _addTurn(_Turn turn) {
@@ -321,49 +354,165 @@ class _SignModeScreenState extends State<SignModeScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Self-view camera.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 170,
-              color: Colors.black,
-              alignment: Alignment.center,
-              child: _camReady && _cam != null
-                  ? _CameraSelfView(controller: _cam!)
-                  : Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        _camError ?? 'Starting camera…',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.videocam_outlined, size: 14, color: Colors.grey),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  'Watch yourself sign. Compose your message, then tap “Speak to them”.',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SignComposer(
-            dark: isDark,
-            onSpeak: _onSign,
-            speakLabel: 'Speak to them',
-            speakIcon: Icons.volume_up,
-          ),
+          _modeToggle(isDark),
+          const SizedBox(height: 10),
+          if (_live) ..._liveLayout(isDark) else ..._keyboardLayout(isDark),
         ],
       ),
     );
   }
+
+  Widget _modeToggle(bool isDark) {
+    Widget seg(String label, IconData ic, bool on, VoidCallback onTap) => Expanded(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                color: on ? ConFriKaColors.oceanBlue : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(ic, size: 16, color: on ? Colors.white : Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(label,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          color: on ? Colors.white : Colors.grey)),
+                ],
+              ),
+            ),
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(children: [
+        seg('Keyboard', Icons.keyboard, !_live, () { if (_live) _setLive(false); }),
+        seg('Live camera · beta', Icons.videocam, _live, () { if (!_live) _setLive(true); }),
+      ]),
+    );
+  }
+
+  List<Widget> _keyboardLayout(bool isDark) => [
+        // Self-view camera.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 170,
+            color: Colors.black,
+            alignment: Alignment.center,
+            child: _camReady && _cam != null
+                ? _CameraSelfView(controller: _cam!)
+                : Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _camError ?? 'Starting camera…',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const Icon(Icons.videocam_outlined, size: 14, color: Colors.grey),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                'Watch yourself sign. Compose your message, then tap “Speak to them”.',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SignComposer(
+          dark: isDark,
+          onSpeak: _onSign,
+          speakLabel: 'Speak to them',
+          speakIcon: Icons.volume_up,
+        ),
+      ];
+
+  List<Widget> _liveLayout(bool isDark) => [
+        // Live recognition view (MediaPipe in a WebView).
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            height: 300,
+            child: LiveSignView(
+              onWord: _onLiveWord,
+              onError: (m) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: isDark ? Colors.white24 : Colors.black.withValues(alpha: 0.08)),
+          ),
+          child: Text(
+            _liveMsg.isEmpty ? 'Recognized words appear here, and are spoken aloud…' : _liveMsg,
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _liveMsg.isEmpty
+                    ? Colors.grey
+                    : (isDark ? Colors.white : Colors.black87)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () => SignSpeechService.instance.speak(_liveMsg),
+                style: FilledButton.styleFrom(
+                    backgroundColor: ConFriKaColors.savannaGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 12)),
+                icon: const Icon(Icons.volume_up, size: 18),
+                label: const Text('Speak all', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: _sendLiveToConversation,
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+              child: const Icon(Icons.subdirectory_arrow_left, size: 18),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () => setState(() => _liveMsg = ''),
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+              child: const Icon(Icons.clear, size: 18),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Beta · fingerspell a letter and hold; lower your hand to finish a word. '
+          'Each finished word is spoken aloud.',
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+      ];
 
   void _showHelp() {
     showDialog<void>(

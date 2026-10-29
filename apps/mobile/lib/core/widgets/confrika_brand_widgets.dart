@@ -91,7 +91,7 @@ class ConFriKaWordmark extends StatelessWidget {
             style: TextStyle(color: ConFriKaColors.sunsetOrange),
           ),
           TextSpan(
-            text: 'Ka',
+            text: 'ka',
             style: TextStyle(color: ConFriKaColors.savannaGreen),
           ),
         ],
