@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="ConFriKa, talk to all of Africa in your own language. Real-time translation across 200+ languages, encrypted chat, calls and communities. Download on Android and iPhone.">
+<meta name="description" content="ConFriKa, talk to all of Africa in your own language. Real-time translation across 200+ languages, encrypted chat, calls and communities, Sign Mode for Deaf & non-speaking users, and Teach & Earn. Download on Android and iPhone.">
 <meta property="og:title" content="ConFriKa, Many languages. One Africa.">
 <meta property="og:description" content="Real-time African language translation, encrypted chat, calls and communities.">
 <meta property="og:url" content="https://confrika.online">
@@ -148,10 +148,44 @@
     </div>
     <span class="sp"></span>
     <a class="link" href="#features">Features</a>
+    <a class="link" href="#accessibility">Sign Mode</a>
+    <a class="link" href="#teach-earn">Teach &amp; Earn</a>
     <a class="link" href="#communities">Communities</a>
     <a class="btn primary" href="#download">Get the app</a>
   </div>
 </header>
+
+<style>
+  /* African kente-inspired accent strip used to divide sections. */
+  .kente{height:9px;border:0;margin:0;background:repeating-linear-gradient(90deg,
+     var(--ocean) 0 20px, var(--green) 20px 34px, var(--sunset) 34px 54px,
+     #E8B923 54px 68px, var(--ocean-deep) 68px 82px)}
+  /* Sign Mode (accessibility) section */
+  .access{background:var(--sand)}
+  .split{display:grid;grid-template-columns:1fr;gap:30px;align-items:center;margin-top:22px}
+  @media(min-width:860px){.split{grid-template-columns:1.08fr .92fr}}
+  .steps{display:grid;gap:14px}
+  .step{display:flex;gap:12px;align-items:flex-start}
+  .step .b{flex:none;width:30px;height:30px;border-radius:9px;background:var(--green);
+    color:#fff;font-weight:800;display:grid;place-items:center;font-family:var(--display)}
+  .step div:last-child{color:var(--muted)}
+  .step b{color:var(--fg)}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .tag{font-size:.78rem;font-weight:700;padding:6px 12px;border-radius:999px;
+    background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+  .signcard{background:var(--surface);border:1px solid var(--line);border-radius:22px;
+    padding:22px;box-shadow:0 20px 50px rgba(14,58,95,.10)}
+  .signcard .big{font-size:3rem;text-align:center;line-height:1}
+  .signcard .say{margin:12px 0;padding:12px 14px;border-radius:14px;font-weight:700;
+    background:color-mix(in srgb,var(--green) 13%,transparent)}
+  .signcard .hear{margin-top:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line)}
+  .signcard .lbl{text-align:center;color:var(--muted);font-weight:700;font-size:.9rem}
+  /* Teach & Earn */
+  .earn .card .ic{background:color-mix(in srgb,var(--sunset) 16%,transparent)}
+  .pill{display:inline-flex;gap:8px;align-items:center;margin-top:20px;
+    background:color-mix(in srgb,var(--sunset) 14%,transparent);color:var(--sunset);
+    font-weight:800;border-radius:999px;padding:9px 16px;font-size:.85rem}
+</style>
 
 <section class="hero">
   <div class="wrap">
@@ -213,6 +247,43 @@
   </div>
 </section>
 
+<hr class="kente">
+
+<section class="block access" id="accessibility">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">Built for everyone</p>
+      <h2>Sign Mode — for Deaf &amp; non-speaking users.</h2>
+      <p>Lay your phone down, step back, and let ConFriKa be your voice.</p>
+    </div>
+    <div class="split">
+      <div>
+        <div class="steps">
+          <div class="step"><div class="b">1</div><div><b>Watch yourself sign.</b> The screen splits — your front-camera self-view below, the conversation above.</div></div>
+          <div class="step"><div class="b">2</div><div><b>Sign to speak.</b> Fingerspell or tap a phrase, and ConFriKa says it out loud for the hearing person.</div></div>
+          <div class="step"><div class="b">3</div><div><b>See what they say.</b> Their speech becomes live captions, so the conversation flows both ways.</div></div>
+          <div class="step"><div class="b">4</div><div><b>On calls &amp; in meetings.</b> Sign and your words are spoken into the call; our browser extension reads your signing live from the camera in web video calls.</div></div>
+        </div>
+        <div class="tags">
+          <span class="tag">ASL fingerspelling</span>
+          <span class="tag">Quick-phrase palette</span>
+          <span class="tag">Speech-to-caption</span>
+          <span class="tag">Browser extension</span>
+        </div>
+      </div>
+      <div class="signcard">
+        <div class="big">🤟</div>
+        <p class="lbl">You sign…</p>
+        <div class="say">🔊 “Hello, how much is this?”</div>
+        <p class="lbl">…they speak, you read</p>
+        <div class="hear">“It is five hundred naira.”</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="kente">
+
 <section class="comm" id="communities">
   <div class="wrap block" style="padding-block:56px">
     <div class="head">
@@ -230,6 +301,26 @@
     </div>
   </div>
 </section>
+
+<hr class="kente">
+
+<section class="block earn" id="teach-earn">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">Learn &amp; earn</p>
+      <h2>Teach &amp; Earn — learn from native speakers.</h2>
+      <p>Learn a language from the people who actually speak it — and when you teach, you earn.</p>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="ic">🎓</div><h3>Learn from natives</h3><p>Hear real pronunciation and tones from verified native speakers across Africa — not a textbook recording.</p></div>
+      <div class="card"><div class="ic">💰</div><h3>Earn as you teach</h3><p>Add words and confirm pronunciations. Every confirmed contribution earns rewards that grow as you become trusted.</p></div>
+      <div class="card"><div class="ic">✅</div><h3>Get verified</h3><p>Reach the confirmation milestone to become a verified, monetised teacher with your own public profile.</p></div>
+    </div>
+    <div style="text-align:center"><span class="pill">💵 Rewards tracked today · payouts coming soon</span></div>
+  </div>
+</section>
+
+<hr class="kente">
 
 <section class="dl" id="download">
   <div class="wrap">
@@ -255,6 +346,8 @@
     <span style="margin-left:6px">· confrika.online</span>
     <span class="sp"></span>
     <a href="#features">Features</a>
+    <a href="#accessibility">Sign Mode</a>
+    <a href="#teach-earn">Teach &amp; Earn</a>
     <a href="#communities">Communities</a>
     <a href="#download">Download</a>
     <a href="privacy.html">Privacy</a>
