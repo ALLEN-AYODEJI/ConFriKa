@@ -58,8 +58,11 @@ async def test_metrics_beacon_counts_and_surfaces_in_stats():
         assert s["ext_opens"] == 1
         assert s["app_opens"] == 0
         for k in ["new_users_24h", "new_users_7d", "messages_24h",
-                  "calls_total", "registered_devices"]:
+                  "calls_total", "registered_devices", "calls_by_country", "daily"]:
             assert k in s
+        assert isinstance(s["calls_by_country"], list)
+        assert len(s["daily"]) == 14
+        assert {"date", "messages", "calls", "signups"} <= set(s["daily"][0].keys())
 
 
 @pytest.mark.asyncio

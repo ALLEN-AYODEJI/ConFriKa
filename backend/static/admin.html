@@ -125,6 +125,10 @@
       .grouplabel{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;
         color:var(--muted);margin:20px 0 8px}
       .tile .note{font-size:.66rem;color:var(--muted);margin-top:4px}
+      .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+      @media(max-width:620px){.row2{grid-template-columns:1fr}}
+      .legend{display:flex;gap:14px;font-size:.78rem;margin-top:6px;flex-wrap:wrap}
+      .legend b{font-weight:800}
     </style>
     <div class="shell">
       <aside class="side">
@@ -147,8 +151,18 @@
           <div class="grouplabel">Teach &amp; Earn &amp; content</div>
           <div class="tiles" id="t-teach"></div>
           <div class="panel">
-            <h2><span class="dot"></span>Users by country</h2>
-            <div id="countries"></div>
+            <h2><span class="dot"></span>Daily usage · last 14 days</h2>
+            <div id="signal"></div>
+          </div>
+          <div class="row2">
+            <div class="panel">
+              <h2><span class="dot"></span>Users by country</h2>
+              <div id="countries"></div>
+            </div>
+            <div class="panel">
+              <h2><span class="dot"></span>Calls by country</h2>
+              <div id="callsCountry"></div>
+            </div>
           </div>
         </section>
 
@@ -249,6 +263,29 @@ async function loadStats(){
   document.getElementById('countries').innerHTML = s.users_by_country.map(c=>
     `<div class="cc"><div class="t"><span>${c.country||'—'}</span><b>${c.count}</b></div><div class="bar"><i style="width:${c.count/max*100}%"></i></div></div>`
   ).join('') || '<p class="muted">No data yet</p>';
+  // Calls by country.
+  const cbc = s.calls_by_country || [];
+  const cmax = Math.max(1, ...cbc.map(c=>c.count));
+  document.getElementById('callsCountry').innerHTML = cbc.map(c=>
+    `<div class="cc"><div class="t"><span>${c.country||'—'}</span><b>${c.count}</b></div><div class="bar"><i style="width:${c.count/cmax*100}%"></i></div></div>`
+  ).join('') || '<p class="muted">No calls yet</p>';
+  // Daily usage signal chart.
+  document.getElementById('signal').innerHTML = drawSignal(s.daily || []);
+}
+function drawSignal(data){
+  if(!data.length) return '<p class="muted">No activity yet</p>';
+  const W=640,H=170,P=26,n=data.length;
+  const maxV=Math.max(1,...data.map(d=>Math.max(d.messages,d.calls,d.signups)));
+  const x=i=> P + (W-2*P)*(n<=1?0:i/(n-1));
+  const y=v=> (H-P) - (H-2*P)*(v/maxV);
+  const pts=k=> data.map((d,i)=>`${x(i).toFixed(1)},${y(d[k]).toFixed(1)}`).join(' ');
+  const line=(k,c)=>`<polyline fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="${pts(k)}"/>`;
+  const area=(k,c)=>`<polygon fill="${c}" opacity=".12" points="${x(0).toFixed(1)},${y(0).toFixed(1)} ${pts(k)} ${x(n-1).toFixed(1)},${y(0).toFixed(1)}"/>`;
+  const gridY=[0,.5,1].map(f=>`<line x1="${P}" x2="${W-P}" y1="${y(maxV*f)}" y2="${y(maxV*f)}" stroke="var(--line)" stroke-width="1"/>`).join('');
+  const labels=data.map((d,i)=> (i%2===0)?`<text x="${x(i).toFixed(1)}" y="${H-7}" font-size="9" text-anchor="middle" fill="var(--muted)">${d.date}</text>`:'').join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${gridY}${area('messages','#154C79')}${line('messages','#154C79')}${line('calls','#E87722')}${line('signups','#2D8A4E')}${labels}
+    <text x="${P}" y="14" font-size="9" fill="var(--muted)">peak ${maxV}</text></svg>
+    <div class="legend"><b style="color:#154C79">● Messages</b><b style="color:#E87722">● Calls</b><b style="color:#2D8A4E">● Signups</b></div>`;
 }
 async function loadCommunities(){
   const list = await api('/admin/communities');

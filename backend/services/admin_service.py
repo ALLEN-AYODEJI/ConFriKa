@@ -116,6 +116,50 @@ class AdminService:
             )
         ) or 0
         calls_total = await db.scalar(select(func.count(CallSession.id))) or 0
+        # Calls grouped by the caller's country (top 10).
+        cc_rows = (
+            await db.execute(
+                select(User.country_code, func.count(CallSession.id))
+                .join(User, User.id == CallSession.caller_id)
+                .group_by(User.country_code)
+                .order_by(func.count(CallSession.id).desc())
+                .limit(10)
+            )
+        ).all()
+        calls_by_country = [{"country": c or "—", "count": n} for c, n in cc_rows]
+        # Daily usage over the last 14 days (messages, calls, signups per day).
+        window = 14
+        start_date = (now - timedelta(days=window - 1)).date()
+        start_dt = datetime(start_date.year, start_date.month, start_date.day)
+
+        def _bucket(times):
+            b: Dict[str, int] = {}
+            for t in times:
+                if t is None:
+                    continue
+                key = t.date().isoformat()
+                b[key] = b.get(key, 0) + 1
+            return b
+
+        dm_times = (await db.scalars(
+            select(DirectMessage.created_at).where(DirectMessage.created_at >= start_dt))).all()
+        gm_times = (await db.scalars(
+            select(GlobalSpacesMessage.created_at).where(GlobalSpacesMessage.created_at >= start_dt))).all()
+        call_times = (await db.scalars(
+            select(CallSession.started_at).where(CallSession.started_at >= start_dt))).all()
+        user_times = (await db.scalars(
+            select(User.created_at).where(User.created_at >= start_dt))).all()
+        mb, gb, cb, ub = _bucket(dm_times), _bucket(gm_times), _bucket(call_times), _bucket(user_times)
+        daily = []
+        for i in range(window):
+            d = start_date + timedelta(days=i)
+            key = d.isoformat()
+            daily.append({
+                "date": d.strftime("%m-%d"),
+                "messages": mb.get(key, 0) + gb.get(key, 0),
+                "calls": cb.get(key, 0),
+                "signups": ub.get(key, 0),
+            })
         # ── Reach ─────────────────────────────────────────────────────────
         # Registered devices (FCM tokens) is a real proxy for installs.
         devices = await db.scalar(select(func.count(DeviceToken.id))) or 0
@@ -138,6 +182,8 @@ class AdminService:
             "new_users_7d": new_users_7d,
             "messages_24h": int(dm_24h) + int(gm_24h),
             "calls_total": calls_total,
+            "calls_by_country": calls_by_country,
+            "daily": daily,
             # reach
             "registered_devices": devices,
             "web_pageviews": reach["web_pageview"],
