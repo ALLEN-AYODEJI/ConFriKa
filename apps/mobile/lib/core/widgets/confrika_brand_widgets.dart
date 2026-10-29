@@ -66,9 +66,9 @@ class ConFriKaAddLogoBadge extends StatelessWidget {
   }
 }
 
-/// Renders the ConFrika wordmark as a single word with all three brand colours
-/// flowing across it as a gradient (ocean → sunset → green). Keeps the colours
-/// but reads as one word, never "Con Fri ka".
+/// Renders the ConFrika wordmark with the three distinct brand colours
+/// ("Con" blue, "Fri" orange, "ka" green). Lowercase "ka" keeps it reading as
+/// one word, "ConFrika".
 class ConFriKaWordmark extends StatelessWidget {
   final double fontSize;
 
@@ -76,24 +76,18 @@ class ConFriKaWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShaderMask(
-      shaderCallback: (bounds) => const LinearGradient(
-        colors: [
-          ConFriKaColors.oceanBlue,
-          ConFriKaColors.sunsetOrange,
-          ConFriKaColors.savannaGreen,
-        ],
-        stops: [0.0, 0.52, 1.0],
-      ).createShader(bounds),
-      blendMode: BlendMode.srcIn,
-      child: Text(
-        'ConFrika',
+    return RichText(
+      text: TextSpan(
         style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.5,
-          color: Colors.white, // replaced by the shader
         ),
+        children: const [
+          TextSpan(text: 'Con', style: TextStyle(color: ConFriKaColors.oceanBlue)),
+          TextSpan(text: 'Fri', style: TextStyle(color: ConFriKaColors.sunsetOrange)),
+          TextSpan(text: 'ka', style: TextStyle(color: ConFriKaColors.savannaGreen)),
+        ],
       ),
     );
   }
