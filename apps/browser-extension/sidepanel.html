@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConFriKa Sign</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><b><span class="c">Con</span>FriKa</b> &nbsp;Sign — live</header>
+<div class="kente"></div>
+<main>
+  <div class="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="live" id="live"><span class="dot"></span><span id="liveText">Camera off</span></div>
+    <div class="token" id="token">·</div>
+    <div class="hint" id="hint">Sign a letter and hold briefly. Lower your hand to end a word.</div>
+  </div>
+
+  <div class="row">
+    <button id="camBtn" class="primary">Start camera</button>
+    <div class="seg" id="alpha" title="Fingerspelling alphabet">
+      <button data-a="letters" class="on">ABC</button>
+      <button data-a="digits">123</button>
+    </div>
+    <button id="autoSpeak" class="toggle on" title="Speak each finished word">🔊 Auto-speak</button>
+  </div>
+
+  <div class="lbl">Your message</div>
+  <div class="msg empty" id="msg">Start the camera and sign…</div>
+  <div class="btns">
+    <button id="speakBtn" class="ocean">🔊 Speak</button>
+    <button id="spaceBtn">␣ Space</button>
+    <button id="backBtn">⌫ Delete</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div class="phrases" id="phrases"></div>
+
+  <div class="lbl">What they say</div>
+  <div class="cap empty" id="cap">Tap “Listen” to caption the other person.</div>
+  <div class="btns"><button id="listenBtn" class="toggle">🎧 Listen to them</button></div>
+
+  <div class="err" id="err"></div>
+  <p class="foot">On a call, keep your speaker on so the other person hears your spoken signs.<br>
+    Signing is read on your device · ConFriKa</p>
+</main>
+<script type="module" src="sidepanel.js"></script>
+</body>
+</html>

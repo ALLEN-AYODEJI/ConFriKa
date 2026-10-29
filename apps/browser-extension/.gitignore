@@ -1,0 +1,2 @@
+# MediaPipe runtime + model are fetched by fetch-vendor.sh, not committed.
+vendor/
