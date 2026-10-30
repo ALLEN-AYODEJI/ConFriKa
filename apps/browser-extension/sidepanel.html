@@ -10,6 +10,22 @@
 <header><b><span class="c">Con</span>FriKa</b> &nbsp;Sign — live</header>
 <div class="kente"></div>
 <main>
+  <div class="acct" id="acct">
+    <span class="acctInfo" id="acctInfo">Not signed in</span>
+    <button id="signInBtn" class="mini">Sign in</button>
+    <button id="signOutBtn" class="mini" hidden>Sign out</button>
+  </div>
+  <div class="login" id="login" hidden>
+    <input id="loginEmail" type="email" placeholder="Email or @username" autocomplete="username">
+    <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password">
+    <div class="btns">
+      <button id="loginSubmit" class="ocean">Sign in</button>
+      <button id="loginCancel">Cancel</button>
+    </div>
+    <div class="loginErr" id="loginErr"></div>
+    <p class="loginNote">Signing in links your usage to your ConFrika account. Signing is free to use either way.</p>
+  </div>
+
   <div class="stage">
     <video id="video" autoplay playsinline muted></video>
     <div class="live" id="live"><span class="dot"></span><span id="liveText">Camera off</span></div>

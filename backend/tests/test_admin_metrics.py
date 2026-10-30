@@ -84,3 +84,30 @@ async def test_admin_communities_and_recent_content():
         r = await c.get("/api/v1/admin/content/recent")
         assert r.status_code == 200
         assert r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_extension_install_tracking_and_admin_view():
+    async with await _client() as c:
+        iid = "install-abc-123"
+        assert (await c.post("/api/v1/metrics/ext",
+                json={"install_id": iid, "event": "register", "version": "0.1.0"})).status_code == 204
+        assert (await c.post("/api/v1/metrics/ext",
+                json={"install_id": iid, "event": "open"})).status_code == 204
+        for _ in range(2):
+            assert (await c.post("/api/v1/metrics/ext",
+                    json={"install_id": iid, "event": "recognize"})).status_code == 204
+        # A second, distinct install.
+        assert (await c.post("/api/v1/metrics/ext",
+                json={"install_id": "other-install", "event": "open"})).status_code == 204
+        # Unknown events are ignored without error.
+        assert (await c.post("/api/v1/metrics/ext",
+                json={"install_id": iid, "event": "bogus"})).status_code == 204
+
+        e = (await c.get("/api/v1/admin/extension")).json()
+        assert e["total_installs"] == 2
+        assert e["total_recognitions"] == 2
+        assert e["total_opens"] >= 2
+        assert e["anonymous_installs"] == 2
+        assert e["signed_in_installs"] == 0
+        assert any(r["install_id"].startswith("install-abc") for r in e["recent"])

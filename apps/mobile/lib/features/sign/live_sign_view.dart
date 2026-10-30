@@ -86,15 +86,17 @@ class _LiveSignViewState extends State<LiveSignView> {
       final out = await ConFriKaApiClient.instance.recognizeSignWord(frames: frames);
       final label = (out['label'] ?? '').toString();
       final token = (out['token'])?.toString();
-      final stable = out['stable'] == true;
+      final conf = (out['confidence'] is num) ? (out['confidence'] as num).toDouble() : 0.0;
       final note = (out['note'] ?? '').toString();
-      // Push the outcome back into the page's overlay.
+      // Speak when reasonably confident; otherwise surface the best guess only.
+      const speakMin = 0.35;
+      final accept = token != null && token.isNotEmpty && conf >= speakMin;
       await _controller?.evaluateJavascript(source:
-          'window.cfResult && window.cfResult(${jsonEncode(label)}, $stable, ${jsonEncode(note)});');
-      if (stable && token != null && token.isNotEmpty) {
+          'window.cfResult && window.cfResult(${jsonEncode(label)}, $accept, ${jsonEncode(note)});');
+      if (accept) {
         widget.onWord(label.isNotEmpty ? label : token);
       } else {
-        widget.onToken?.call(note.isNotEmpty ? note : 'Not sure — sign again.');
+        widget.onToken?.call(note.isNotEmpty ? note : 'Not sure — sign bigger, centered.');
       }
     } catch (e) {
       await _controller?.evaluateJavascript(source:

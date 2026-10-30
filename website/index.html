@@ -213,6 +213,8 @@
   .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
   .tag{font-size:.78rem;font-weight:700;padding:6px 12px;border-radius:999px;
     background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+  .extdl{margin-top:20px}
+  .extnote{font-size:.8rem;color:var(--muted);margin:10px 0 0;max-width:52ch}
   .signcard{background:var(--surface);border:1px solid var(--line);border-radius:22px;
     padding:22px;box-shadow:0 20px 50px rgba(14,58,95,.10)}
   .signcard .big{font-size:3rem;text-align:center;line-height:1}
@@ -308,9 +310,14 @@
         </div>
         <div class="tags">
           <span class="tag">ASL fingerspelling</span>
+          <span class="tag">Whole-word signs · beta</span>
           <span class="tag">Quick-phrase palette</span>
           <span class="tag">Speech-to-caption</span>
           <span class="tag">Browser extension</span>
+        </div>
+        <div class="extdl">
+          <a class="btn primary" href="/ConFrika-Extension-v0.1.0.zip" download>⬇ Download the browser extension</a>
+          <p class="extnote">Chrome or Edge 114+. Unzip, open <b>chrome://extensions</b>, turn on <b>Developer mode</b>, then <b>Load unpacked</b> and pick the folder. Reads your signing live in web video calls and speaks it aloud.</p>
         </div>
       </div>
       <div class="signcard">

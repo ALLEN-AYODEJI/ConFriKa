@@ -22,6 +22,15 @@ async def stats(
     return await AdminService.stats(db)
 
 
+@router.get("/extension")
+async def extension(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Browser-extension installs + usage (totals, active, signed-in, recent)."""
+    return await AdminService.extension_stats(db)
+
+
 @router.get("/users")
 async def list_users(
     q: str | None = Query(None),

@@ -209,6 +209,25 @@ class MetricCounter(Base):
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class ExtensionInstall(Base):
+    """One browser-extension installation, so the admin can track installs and
+    usage. The extension generates a stable ``install_id`` (stored in
+    ``chrome.storage.local``) and reports register/open/recognize events. When
+    the user signs in, their account is attached so usage is attributable;
+    before that the install is tracked anonymously."""
+
+    __tablename__ = "extension_installs"
+
+    install_id = Column(String(64), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    user_email = Column(String(255), nullable=True)
+    version = Column(String(20), nullable=True)
+    open_count = Column(Integer, default=0, nullable=False)
+    recognize_count = Column(Integer, default=0, nullable=False)
+    first_seen = Column(DateTime, default=_utcnow, nullable=False)
+    last_seen = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+
+
 class RevenueEvent(Base):
     """One recognised revenue line (a verified Pro purchase). The sum is the
     platform's total generated income; teacher payouts are deducted from it to

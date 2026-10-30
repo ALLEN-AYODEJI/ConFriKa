@@ -2,15 +2,7 @@ import { HandLandmarker, HolisticLandmarker, FilesetResolver } from './vendor/vi
 import { classifyHand, PHRASE_CATALOG } from './recognizer.js';
 
 const API_BASE = 'https://confrika-backend.fly.dev';
-
-// Reach metric: count one extension open per browser session (fire-and-forget).
-try {
-  if (!sessionStorage.getItem('cf_ext')) {
-    sessionStorage.setItem('cf_ext', '1');
-    fetch(`${API_BASE}/api/v1/metrics/hit?kind=ext_open`,
-      { method: 'POST', mode: 'no-cors', keepalive: true }).catch(() => {});
-  }
-} catch (e) { /* ignore */ }
+const EXT_VERSION = (chrome.runtime?.getManifest && chrome.runtime.getManifest().version) || '';
 
 // ── DOM ──────────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -49,10 +41,12 @@ const WORD_BREAK = 12;   // frames with no hand → end the current fingerspelle
 const wordFrames = [];        // buffered holistic frames for the current sign
 let collecting = false;
 let wordBusy = false;         // a recognize-word request is in flight
-const WORD_MIN_FRAMES = 8;    // too-short bursts are ignored
+const WORD_MIN_FRAMES = 5;    // too-short bursts are ignored
 const WORD_MAX_FRAMES = 150;  // ~5s cap at 30fps
 const WORD_SEND_MAX = 64;     // downsample before sending (model resamples anyway)
-const WORD_BREAK_W = 9;       // frames with no hands → the sign is finished
+const WORD_BREAK_W = 7;       // frames with no hands → the sign is finished
+const WORD_SPEAK_MIN = 0.35;  // speak the top word at/above this confidence
+const WORD_SHOW_MIN = 0.12;   // below this, treat as "nothing recognized"
 
 // ── Voices ────────────────────────────────────────────────────────────────────
 let voices = [];
@@ -294,23 +288,26 @@ async function sendWord(frames) {
     const payload = { frames: downsample(frames, WORD_SEND_MAX), sign_language: 'ASL', top_k: 3 };
     const r = await fetch(`${API_BASE}/api/v1/sign/recognize-word`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify(payload),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const out = await r.json();
-    if (out && out.token) {
+    extEvent('recognize'); // count a word-recognition use (attributed if signed in)
+    const conf = (out && typeof out.confidence === 'number') ? out.confidence : 0;
+    if (out && out.token && conf >= WORD_SPEAK_MIN) {
+      // Confident enough — insert + speak it.
       tokenEl.textContent = '🤟';
-      if (out.stable) {
-        commitWord(out.label || out.token);
-        hintEl.textContent = `“${out.label}” · ${Math.round(out.confidence * 100)}%`;
-      } else {
-        // Low confidence: suggest, but don't auto-insert/speak a likely-wrong word.
-        const alts = (out.candidates || []).slice(0, 3).map((c) => c.label).join(', ');
-        hintEl.textContent = `Not sure — maybe: ${alts || out.label}. Sign again, centered.`;
-      }
+      commitWord(out.label || out.token);
+      hintEl.textContent = `“${out.label}” · ${Math.round(conf * 100)}%`;
+    } else if (out && out.token && conf >= WORD_SHOW_MIN) {
+      // Uncertain — show the best guesses but don't speak a likely-wrong word.
+      tokenEl.textContent = '🤔';
+      const alts = (out.candidates || []).slice(0, 3).map((c) => c.label).join(', ');
+      hintEl.textContent = `Maybe: ${alts || out.label}. Sign again, bigger and centered.`;
     } else {
-      hintEl.textContent = (out && out.note) || 'No sign recognized — try again.';
+      tokenEl.textContent = '·';
+      hintEl.textContent = (out && out.note) || 'No sign recognized — stand back so your hands + face show, then sign.';
     }
   } catch (e) {
     console.warn('ConFriKa Sign: recognize-word failed —', e);
@@ -359,6 +356,11 @@ async function ensureHolisticModel() {
   holisticLandmarker = await HolisticLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: 'vendor/holistic_landmarker.task' },
     runningMode: 'VIDEO',
+    // Lower detection/presence thresholds so hands are picked up more readily
+    // (default 0.5 drops a lot of real signing frames).
+    minFaceDetectionConfidence: 0.3,
+    minPoseDetectionConfidence: 0.3,
+    minHandLandmarksConfidence: 0.3,
   });
 }
 async function ensureModel() {
@@ -505,7 +507,7 @@ function addTyped() {
 // ── Mode switching ──────────────────────────────────────────────────────────────
 function setModeHint() {
   hintEl.textContent = mode === 'words'
-    ? 'Sign a whole word, then lower your hands. (beta · 250 ASL signs)'
+    ? 'Stand back so your head + both hands show. Sign one word clearly, then lower your hands. (beta · 250 ASL signs)'
     : 'Sign a letter and hold briefly. Lower your hand to end a word.';
   $('alpha').style.display = mode === 'words' ? 'none' : '';
 }
@@ -527,7 +529,117 @@ async function setMode(next) {
   }
 }
 
+// ── Account + install tracking ─────────────────────────────────────────────
+// A stable per-install id lets the admin count installs; signing in attaches
+// the usage to the user's account. Sign-in is optional — signing stays usable
+// logged-out (accessibility).
+let installId = null;
+let authToken = null;
+let authEmail = null;
+
+const storageGet = (keys) => new Promise((res) => {
+  try { chrome.storage.local.get(keys, res); } catch (e) { res({}); }
+});
+const storageSet = (obj) => new Promise((res) => {
+  try { chrome.storage.local.set(obj, res); } catch (e) { res(); }
+});
+
+function authHeaders(extra) {
+  const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+  if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+  return h;
+}
+
+async function extEvent(event) {
+  if (!installId) return;
+  try {
+    await fetch(`${API_BASE}/api/v1/metrics/ext`, {
+      method: 'POST', headers: authHeaders(), keepalive: true,
+      body: JSON.stringify({ install_id: installId, event, version: EXT_VERSION }),
+    });
+  } catch (e) { /* fire-and-forget */ }
+}
+
+function renderAccount() {
+  const info = $('acctInfo');
+  if (authEmail) {
+    info.textContent = `Signed in · ${authEmail}`;
+    $('signInBtn').hidden = true;
+    $('signOutBtn').hidden = false;
+  } else {
+    info.textContent = 'Not signed in';
+    $('signInBtn').hidden = false;
+    $('signOutBtn').hidden = true;
+  }
+}
+
+async function doLogin() {
+  const email = $('loginEmail').value.trim();
+  const pass = $('loginPass').value;
+  const le = $('loginErr');
+  le.textContent = '';
+  if (!email || !pass) { le.textContent = 'Enter your email and password.'; return; }
+  $('loginSubmit').disabled = true;
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_or_username: email, password: pass }),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.detail || `Sign-in failed (${r.status})`);
+    }
+    const data = await r.json();
+    authToken = data.access_token;
+    authEmail = (data.user && data.user.email) || email;
+    await storageSet({ cf_token: authToken, cf_email: authEmail });
+    $('login').hidden = true;
+    $('loginPass').value = '';
+    renderAccount();
+    extEvent('open'); // re-report so this install is now attributed to the user
+  } catch (e) {
+    le.textContent = e.message || 'Sign-in failed.';
+  } finally {
+    $('loginSubmit').disabled = false;
+  }
+}
+
+function doLogout() {
+  authToken = null;
+  authEmail = null;
+  storageSet({ cf_token: '', cf_email: '' });
+  renderAccount();
+}
+
+async function initAccount() {
+  const st = await storageGet(['cf_install_id', 'cf_token', 'cf_email']);
+  installId = st.cf_install_id || null;
+  let firstRun = false;
+  if (!installId) {
+    installId = (self.crypto?.randomUUID && self.crypto.randomUUID())
+      || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    await storageSet({ cf_install_id: installId });
+    firstRun = true;
+  }
+  authToken = st.cf_token || null;
+  authEmail = st.cf_email || null;
+  renderAccount();
+  if (firstRun) extEvent('register');
+  // One "open" per browser session.
+  let newSession = true;
+  try {
+    if (sessionStorage.getItem('cf_ext_open')) newSession = false;
+    else sessionStorage.setItem('cf_ext_open', '1');
+  } catch (e) { /* ignore */ }
+  if (newSession) extEvent('open');
+}
+
 // ── Wire up UI ───────────────────────────────────────────────────────────────
+$('signInBtn').addEventListener('click', () => { $('login').hidden = false; $('loginEmail').focus(); });
+$('signOutBtn').addEventListener('click', doLogout);
+$('loginSubmit').addEventListener('click', doLogin);
+$('loginCancel').addEventListener('click', () => { $('login').hidden = true; $('loginErr').textContent = ''; });
+$('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
 $('camBtn').addEventListener('click', () => (running ? stopCamera() : startCamera()));
 $('speakBtn').addEventListener('click', () => speak(text + word));
 $('spaceBtn').addEventListener('click', () => { finalizeWord(); render(); });
@@ -590,3 +702,4 @@ if ('speechSynthesis' in window) {
 }
 setModeHint();
 render();
+initAccount();

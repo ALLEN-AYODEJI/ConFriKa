@@ -18,6 +18,7 @@ from ..database.models import (
     CommunityMembership,
     DeviceToken,
     DirectMessage,
+    ExtensionInstall,
     GlobalSpacesMessage,
     RevenueEvent,
     TeacherProfile,
@@ -190,6 +191,60 @@ class AdminService:
             "web_pageviews": reach["web_pageview"],
             "app_opens": reach["app_open"],
             "ext_opens": reach["ext_open"],
+        }
+
+    @staticmethod
+    async def extension_stats(db: AsyncSession) -> Dict[str, Any]:
+        """Browser-extension installs + usage for the admin dashboard."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        d1 = now - timedelta(days=1)
+        d7 = now - timedelta(days=7)
+        count_col = func.count(ExtensionInstall.install_id)
+        total = await db.scalar(select(count_col)) or 0
+        active_24h = await db.scalar(
+            select(count_col).where(ExtensionInstall.last_seen >= d1)
+        ) or 0
+        active_7d = await db.scalar(
+            select(count_col).where(ExtensionInstall.last_seen >= d7)
+        ) or 0
+        signed_in = await db.scalar(
+            select(count_col).where(ExtensionInstall.user_id.isnot(None))
+        ) or 0
+        total_opens = await db.scalar(
+            select(func.coalesce(func.sum(ExtensionInstall.open_count), 0))
+        ) or 0
+        total_recognitions = await db.scalar(
+            select(func.coalesce(func.sum(ExtensionInstall.recognize_count), 0))
+        ) or 0
+        rows = (
+            await db.execute(
+                select(ExtensionInstall)
+                .order_by(ExtensionInstall.last_seen.desc())
+                .limit(100)
+            )
+        ).scalars().all()
+        recent = [
+            {
+                "install_id": r.install_id[:12],
+                "account": r.user_email or "— anonymous —",
+                "signed_in": r.user_id is not None,
+                "version": r.version or "",
+                "opens": int(r.open_count or 0),
+                "recognitions": int(r.recognize_count or 0),
+                "first_seen": r.first_seen.isoformat() if r.first_seen else None,
+                "last_seen": r.last_seen.isoformat() if r.last_seen else None,
+            }
+            for r in rows
+        ]
+        return {
+            "total_installs": int(total),
+            "active_installs_24h": int(active_24h),
+            "active_installs_7d": int(active_7d),
+            "signed_in_installs": int(signed_in),
+            "anonymous_installs": int(total) - int(signed_in),
+            "total_opens": int(total_opens),
+            "total_recognitions": int(total_recognitions),
+            "recent": recent,
         }
 
     @staticmethod

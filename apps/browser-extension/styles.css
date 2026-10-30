@@ -51,6 +51,17 @@ button.toggle.on{background:var(--sunset);border-color:transparent;color:#fff}
   background:color-mix(in srgb,var(--ocean) 10%,transparent);color:var(--fg);
   border-radius:999px;padding:6px 11px;font-size:.82rem;font-weight:700}
 
+.acct{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.acctInfo{flex:1;font-size:.8rem;font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.mini{padding:6px 10px;font-size:.78rem;border-radius:9px}
+.login{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;padding:12px;
+  background:var(--card);border:1px solid var(--line);border-radius:12px}
+.login input{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--fg);
+  border-radius:9px;padding:9px 11px}
+.login input:focus{outline:2px solid color-mix(in srgb,var(--ocean) 55%,transparent);outline-offset:1px}
+.loginErr{color:#dc2626;font-size:.8rem;min-height:14px}
+.loginNote{color:var(--muted);font-size:.72rem;margin:0}
+
 .voicebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
 .lbl2{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
 #voiceSel{flex:1;min-width:140px;font:inherit;border:1px solid var(--line);background:var(--card);

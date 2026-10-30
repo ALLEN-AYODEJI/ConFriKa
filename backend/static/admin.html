@@ -159,6 +159,7 @@
         <button class="navitem" data-sec="teachers">Teachers</button>
         <button class="navitem" data-sec="payouts">Payouts</button>
         <button class="navitem" data-sec="finance">Finance</button>
+        <button class="navitem" data-sec="extension">Extension</button>
         <button class="navitem" data-sec="moderation">Moderation</button>
       </aside>
       <div class="content">
@@ -255,6 +256,21 @@
           </div>
         </section>
 
+        <section class="sec" id="sec-extension">
+          <h1 class="sectitle">Browser extension</h1>
+          <div class="kpistrip" id="ext"></div>
+          <div class="panel" style="margin-top:14px">
+            <h2><span class="dot"></span>Recent installs &amp; usage</h2>
+            <table><thead><tr><th>Install</th><th>Account</th><th>Version</th><th>Opens</th><th>Recognitions</th><th>Last seen</th></tr></thead>
+            <tbody id="ext-recent"></tbody></table>
+          </div>
+          <p class="muted" style="font-size:.82rem;margin-top:12px;max-width:70ch">
+            Each install reports a stable anonymous id; when the user signs in to
+            the extension, their account is attached so usage is attributable.
+            "Active" counts installs seen within the window.
+          </p>
+        </section>
+
         <section class="sec" id="sec-moderation">
           <h1 class="sectitle">Moderation</h1>
           <div class="panel">
@@ -298,7 +314,7 @@ function showApp(me){
   document.getElementById('loginView').classList.add('hide');
   document.getElementById('appView').classList.remove('hide');
   document.getElementById('who').textContent = me.full_name || me.username;
-  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals(); loadCommunities(); loadModeration(); loadFinance();
+  loadStats(); loadUsers(); loadTeachers(); loadWithdrawals(); loadCommunities(); loadModeration(); loadFinance(); loadExtension();
 }
 function initials(n){return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join().toUpperCase();}
 function _tiles(el, items, s){
@@ -345,6 +361,15 @@ async function loadFinance(){
   const f = await api('/admin/finance');
   const items=[['total_income','Total income'],['paid_to_teachers','Paid to teachers'],['owed_to_teachers','Owed to teachers'],['available_balance','Available balance'],['pro_users','Pro users']];
   document.getElementById('fin').innerHTML = items.map(([k,l])=>`<div class="kpi"><div class="n">${f[k]??'—'}</div><div class="l">${l}</div></div>`).join('');
+}
+async function loadExtension(){
+  const s = await api('/admin/extension');
+  const items=[['total_installs','Total installs'],['active_installs_24h','Active · 24h'],['active_installs_7d','Active · 7d'],['signed_in_installs','Signed-in'],['anonymous_installs','Anonymous'],['total_opens','Opens'],['total_recognitions','Recognitions']];
+  document.getElementById('ext').innerHTML = items.map(([k,l])=>`<div class="kpi"><div class="n">${s[k]??0}</div><div class="l">${l}</div></div>`).join('');
+  const fmt=(iso)=>{ if(!iso) return '—'; const d=new Date(iso.endsWith('Z')?iso:iso+'Z'); return isNaN(d)?'—':d.toLocaleString(); };
+  document.getElementById('ext-recent').innerHTML = (s.recent||[]).map(r=>
+    `<tr><td class="em">${r.install_id}</td><td>${r.signed_in?('<b>'+r.account+'</b>'):('<span class="muted">'+r.account+'</span>')}</td><td>${r.version||'—'}</td><td>${r.opens}</td><td>${r.recognitions}</td><td>${fmt(r.last_seen)}</td></tr>`
+  ).join('') || '<tr><td colspan="6" class="muted">No installs yet.</td></tr>';
 }
 async function loadCommunities(){
   const list = await api('/admin/communities');
