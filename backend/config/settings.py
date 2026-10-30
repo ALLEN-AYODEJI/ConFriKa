@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     NLLB_MAX_INPUT_TOKENS: int = 512
     MODEL_CACHE_DIR: str = "/opt/confrika/models"
     TRANSLATION_WARMUP: bool = True
+    # Whole-word sign model (trained TFLite, 250 ASL signs). Empty => the copy
+    # packaged under backend/models/sign. Point elsewhere (e.g. a Fly volume) to
+    # keep the 11 MB binary out of the image.
+    SIGN_WORD_MODEL_DIR: str = ""
     # Optional managed fallback provider for languages NLLB-200 does not cover
     # (e.g. Tiv). Leave blank to run fully local on NLLB only. When set, the
     # translation router uses Google only for those gap languages; everything

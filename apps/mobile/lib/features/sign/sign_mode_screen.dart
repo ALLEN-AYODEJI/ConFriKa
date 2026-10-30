@@ -44,6 +44,12 @@ class _SignModeScreenState extends State<SignModeScreen>
   // Live-camera mode: MediaPipe recognition in an in-app WebView.
   bool _live = false;
   String _liveMsg = '';
+  String _liveMode = 'spell'; // 'spell' (fingerspell) | 'words' (trained model)
+
+  // Voice selection (male/female/African) for everything spoken aloud.
+  List<SignVoice> _voiceChoices = const [];
+  SignVoice? _voice;
+  String _voiceFilter = 'any';
 
   @override
   void initState() {
@@ -51,6 +57,34 @@ class _SignModeScreenState extends State<SignModeScreen>
     WidgetsBinding.instance.addObserver(this);
     _initCamera();
     _initStt();
+    _loadVoices();
+  }
+
+  Future<void> _loadVoices() async {
+    try {
+      final svc = SignSpeechService.instance;
+      final list = await svc.voicesFiltered();
+      if (!mounted) return;
+      setState(() {
+        _voiceFilter = svc.filter;
+        _voiceChoices = list;
+        _voice = svc.selected ?? (list.isNotEmpty ? list.first : null);
+      });
+    } catch (_) {/* no voices enumerated — speaking still uses the default */}
+  }
+
+  Future<void> _setVoiceFilter(String f) async {
+    await SignSpeechService.instance.setFilter(f);
+    final list = await SignSpeechService.instance.voicesFiltered(f);
+    if (!mounted) return;
+    setState(() {
+      _voiceFilter = f;
+      _voiceChoices = list;
+      if (_voice == null || !list.any((v) => v.name == _voice!.name && v.locale == _voice!.locale)) {
+        _voice = list.isNotEmpty ? list.first : null;
+        if (_voice != null) SignSpeechService.instance.selectVoice(_voice!);
+      }
+    });
   }
 
   @override
@@ -356,7 +390,90 @@ class _SignModeScreenState extends State<SignModeScreen>
         children: [
           _modeToggle(isDark),
           const SizedBox(height: 10),
+          _voiceBar(isDark),
+          const SizedBox(height: 10),
           if (_live) ..._liveLayout(isDark) else ..._keyboardLayout(isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _voiceBar(bool isDark) {
+    final border = isDark ? Colors.white24 : Colors.black.withValues(alpha: 0.08);
+    Widget chip(String label, String value) {
+      final on = _voiceFilter == value;
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: ChoiceChip(
+          label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          selected: on,
+          onSelected: (_) => _setVoiceFilter(value),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          selectedColor: ConFriKaColors.oceanBlue,
+          labelStyle: TextStyle(color: on ? Colors.white : null),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.record_voice_over, size: 15, color: ConFriKaColors.oceanBlue),
+              const SizedBox(width: 6),
+              Text('SPEAKING VOICE',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900,
+                      color: Colors.grey.shade600, letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              chip('All', 'any'),
+              chip('Female', 'female'),
+              chip('Male', 'male'),
+              chip('African', 'african'),
+            ]),
+          ),
+          const SizedBox(height: 6),
+          if (_voiceChoices.isEmpty)
+            Text('Using the device default voice (no selectable voices found).',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600))
+          else
+            DropdownButtonHideUnderline(
+              child: DropdownButton<SignVoice>(
+                isExpanded: true,
+                value: _voiceChoices.firstWhere(
+                  (v) => _voice != null && v.name == _voice!.name && v.locale == _voice!.locale,
+                  orElse: () => _voiceChoices.first,
+                ),
+                items: [
+                  for (final v in _voiceChoices)
+                    DropdownMenuItem<SignVoice>(
+                      value: v,
+                      child: Text('${v.name} · ${v.locale}',
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13)),
+                    ),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() => _voice = v);
+                  SignSpeechService.instance.selectVoice(v);
+                  SignSpeechService.instance.speak('Hello'); // preview the voice
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -443,14 +560,68 @@ class _SignModeScreenState extends State<SignModeScreen>
         ),
       ];
 
+  Widget _liveModeToggle(bool isDark) {
+    Widget seg(String label, String value, IconData ic) {
+      final on = _liveMode == value;
+      return Expanded(
+        child: InkWell(
+          onTap: () { if (_liveMode != value) setState(() => _liveMode = value); },
+          borderRadius: BorderRadius.circular(9),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: on ? ConFriKaColors.savannaGreen : Colors.transparent,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(ic, size: 15, color: on ? Colors.white : Colors.grey),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11,
+                          color: on ? Colors.white : Colors.grey)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : const Color(0xFFEDF1F6),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(children: [
+        seg('Fingerspell', 'spell', Icons.sign_language),
+        seg('Words · beta', 'words', Icons.chat_bubble_outline),
+      ]),
+    );
+  }
+
   List<Widget> _liveLayout(bool isDark) => [
+        _liveModeToggle(isDark),
+        const SizedBox(height: 8),
         // Live recognition view (MediaPipe in a WebView).
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: SizedBox(
             height: 300,
             child: LiveSignView(
+              mode: _liveMode,
               onWord: _onLiveWord,
+              onToken: (m) {
+                // Low-confidence hint from the word model — surface briefly.
+                if (mounted && _liveMode == 'words') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(m), duration: const Duration(seconds: 2)));
+                }
+              },
               onError: (m) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -508,8 +679,11 @@ class _SignModeScreenState extends State<SignModeScreen>
         ),
         const SizedBox(height: 6),
         Text(
-          'Beta · fingerspell a letter and hold; lower your hand to finish a word. '
-          'Each finished word is spoken aloud.',
+          _liveMode == 'words'
+              ? 'Beta · sign a whole word (one of 250 everyday ASL signs), then lower '
+                  'your hands. The recognized word is spoken aloud in your chosen voice.'
+              : 'Beta · fingerspell a letter and hold; lower your hand to finish a word. '
+                  'Each finished word is spoken aloud.',
           style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
         ),
       ];
@@ -525,8 +699,10 @@ class _SignModeScreenState extends State<SignModeScreen>
           '• Build your message with the fingerspelling keys or a quick phrase, '
           'then tap “Speak to them” — your phone says it aloud.\n'
           '• Tap “Listen to them” to turn the other person\'s speech into text.\n\n'
-          'Live camera auto-detection of signs is coming next (and is available '
-          'now in the ConFriKa browser extension for video calls).',
+          'Live camera (beta): switch to it to read your signing from the camera — '
+          'either fingerspelling, or whole words (250 everyday ASL signs). '
+          'Pick the speaking voice — male, female, or an African voice when your '
+          'device has one installed.',
         ),
         actions: [
           TextButton(

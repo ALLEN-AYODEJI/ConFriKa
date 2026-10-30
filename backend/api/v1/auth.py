@@ -32,6 +32,10 @@ class RegisterDeviceRequest(BaseModel):
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
+# Same bearer scheme but non-fatal when the header is missing/invalid — used by
+# accessibility routes (sign recognition) that must also serve logged-out
+# clients such as the browser extension.
+optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
@@ -64,6 +68,21 @@ async def get_current_user(
             detail="This account has been suspended.",
         )
     return user
+
+
+async def optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Return the authenticated user, or ``None`` when no valid token is
+    presented. Never raises on a missing/invalid token — routes that use this
+    are usable logged-out (e.g. the login-free browser extension)."""
+    if credentials is None:
+        return None
+    try:
+        return await get_current_user(credentials, db)
+    except HTTPException:
+        return None
 
 
 @router.post("/signup", response_model=OtpSentResponse, dependencies=[rate_limit("signup", 5, 60)])

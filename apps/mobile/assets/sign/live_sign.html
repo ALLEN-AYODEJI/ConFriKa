@@ -26,10 +26,13 @@
 <div id="hint">Sign a letter and hold briefly. Lower your hand to finish a word.</div>
 
 <script type="module">
-import { HandLandmarker, FilesetResolver } from
+import { HandLandmarker, HolisticLandmarker, FilesetResolver } from
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs';
 
-// ── Geometric ASL recognizer (identical logic to the backend + the extension) ──
+const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';
+const MODE = new URLSearchParams(location.search).get('mode') === 'words' ? 'words' : 'spell';
+
+// ── Geometric ASL fingerspelling recognizer (identical to backend + extension) ──
 const WRIST=0, MIDDLE_MCP=9, INDEX_MCP=5, THUMB_TIP=4, THUMB_IP=3;
 const TIPS={index:8,middle:12,ring:16,pinky:20}, PIPS={index:6,middle:10,ring:14,pinky:18};
 const PATTERNS=new Map([
@@ -62,48 +65,103 @@ function send(type,value){
 const statusEl=document.getElementById('status');
 const statusText=document.getElementById('statusText');
 const tokenEl=document.getElementById('token');
+const hintEl=document.getElementById('hint');
 const video=document.getElementById('video');
 
-// ── Commit loop (same stability + word-break logic as the extension) ──────────
+// Flutter pushes the recognized whole word back here (words mode).
+window.cfResult=function(label, stable, note){
+  if(label && stable){ tokenEl.textContent='🤟'; hintEl.textContent='“'+label+'”'; }
+  else { tokenEl.textContent='·'; hintEl.textContent = note || ('Not sure'+(label?': maybe '+label:'')+' — sign again, centered.'); }
+};
+
+// ── Fingerspelling loop ────────────────────────────────────────────────────────
 const BUFFER=10, COMMIT=0.6, WORD_BREAK=12;
-let buffer=[], word='', last=null, unrec=0, noHand=0, running=false, busy=false, landmarker=null;
+let buffer=[], word='', last=null, unrec=0, noHand=0, running=false, busy=false;
+let handLM=null, holisticLM=null;
 const push=t=>{ buffer.push(t); if(buffer.length>BUFFER) buffer.shift(); };
 function dominant(){ const c=new Map(); for(const t of buffer) if(t) c.set(t,(c.get(t)||0)+1);
   let best=null,n=0; for(const [t,k] of c) if(k>n){n=k;best=t;} return {token:best,share:n/BUFFER}; }
 function finalizeWord(){ if(word){ send('word',word); word=''; } }
 function commit(c){ if(c.kind==='phrase'){ finalizeWord(); send('word',c.label); } else { word+=c.token; } last=c.token; }
 
+function spellStep(){
+  const res=handLM.detectForVideo(video,performance.now());
+  const hand=res.landmarks&&res.landmarks[0];
+  if(!hand){ noHand++; unrec=0; push(null); tokenEl.textContent='·';
+    if(noHand===WORD_BREAK&&(word||last)){ finalizeWord(); last=null; } }
+  else{ noHand=0; const c=classify(hand);
+    if(!c){ unrec++; push(null); tokenEl.textContent='…'; if(unrec>=4) last=null; }
+    else{ unrec=0; push(c.token); tokenEl.textContent=c.kind==='phrase'?'🤟':c.token;
+      const d=dominant();
+      if(d.token===c.token && d.share>=COMMIT && c.token!==last) commit(c);
+    } }
+}
+
+// ── Whole-word loop (holistic landmarks → Flutter → backend model) ──────────────
+const WORD_MIN=8, WORD_MAX=150, WORD_SEND_MAX=48, WORD_BREAK_W=9;
+let wframes=[], collecting=false, wordBusy=false, noHandW=0;
+function part(a){ if(!Array.isArray(a)||a.length===0) return []; return Array.isArray(a[0])?a[0]:a; }
+function lm(p){ return {x:+p.x.toFixed(4), y:+p.y.toFixed(4), z:+((p.z||0).toFixed(4))}; }
+function downsample(f,max){ if(f.length<=max) return f; const step=f.length/max, out=[];
+  for(let i=0;i<max;i++) out.push(f[Math.floor(i*step)]); return out; }
+
+function wordsStep(){
+  const res=holisticLM.detectForVideo(video,performance.now());
+  const face=part(res.faceLandmarks).slice(0,468);
+  const pose=part(res.poseLandmarks);
+  const left=part(res.leftHandLandmarks);
+  const right=part(res.rightHandLandmarks);
+  const hands = left.length>0 || right.length>0;
+  if(hands){
+    noHandW=0; collecting=true;
+    wframes.push({face:face.map(lm), pose:pose.map(lm), left_hand:left.map(lm), right_hand:right.map(lm)});
+    if(wframes.length>WORD_MAX) wframes.shift();
+    tokenEl.textContent='●'; hintEl.textContent='Reading your sign… ('+wframes.length+')';
+  } else {
+    tokenEl.textContent = wordBusy?'…':'·';
+    if(collecting){ noHandW++;
+      if(noHandW>=WORD_BREAK_W){ collecting=false;
+        if(wframes.length>=WORD_MIN && !wordBusy){
+          wordBusy=true; hintEl.textContent='Recognizing…';
+          // Send as a JSON string so the bridge keeps object keys intact.
+          send('frames', JSON.stringify(downsample(wframes.splice(0,wframes.length), WORD_SEND_MAX)));
+          // Flutter calls window.cfResult() with the result; clear busy shortly after.
+          setTimeout(()=>{ wordBusy=false; }, 50);
+        } else { wframes.length=0; }
+      }
+    }
+  }
+}
+
 function loop(){
   if(!running) return;
   requestAnimationFrame(loop);
   if(busy||video.readyState<2) return;
   busy=true;
-  try{
-    const res=landmarker.detectForVideo(video,performance.now());
-    const hand=res.landmarks&&res.landmarks[0];
-    if(!hand){ noHand++; unrec=0; push(null); tokenEl.textContent='·';
-      if(noHand===WORD_BREAK&&(word||last)){ finalizeWord(); last=null; } }
-    else{ noHand=0; const c=classify(hand);
-      if(!c){ unrec++; push(null); tokenEl.textContent='…'; if(unrec>=4) last=null; }
-      else{ unrec=0; push(c.token); tokenEl.textContent=c.kind==='phrase'?'🤟':c.token;
-        const d=dominant();
-        if(d.token===c.token && d.share>=COMMIT && c.token!==last) commit(c);
-      } }
-  }catch(e){} finally{ busy=false; }
+  try{ if(MODE==='words') wordsStep(); else spellStep(); }
+  catch(e){} finally{ busy=false; }
 }
 
 async function start(){
   try{
     statusText.textContent='Loading model…';
-    const fileset=await FilesetResolver.forVisionTasks(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
-    landmarker=await HandLandmarker.createFromOptions(fileset,{
-      baseOptions:{modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'},
-      numHands:1, runningMode:'VIDEO'});
+    const fileset=await FilesetResolver.forVisionTasks(CDN+'/wasm');
+    if(MODE==='words'){
+      holisticLM=await HolisticLandmarker.createFromOptions(fileset,{
+        baseOptions:{modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task'},
+        runningMode:'VIDEO'});
+      hintEl.textContent='Sign a whole word, then lower your hands. (beta · 250 ASL signs)';
+    } else {
+      handLM=await HandLandmarker.createFromOptions(fileset,{
+        baseOptions:{modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'},
+        numHands:1, runningMode:'VIDEO'});
+    }
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
     video.srcObject=stream; await video.play();
-    running=true; statusEl.classList.add('on'); statusText.textContent='Reading your signs';
+    running=true; statusEl.classList.add('on');
+    statusText.textContent = MODE==='words' ? 'Reading whole signs' : 'Reading your signs';
     send('ready',true);
     requestAnimationFrame(loop);
   }catch(e){

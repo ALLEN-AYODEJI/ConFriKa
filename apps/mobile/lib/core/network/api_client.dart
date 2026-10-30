@@ -356,6 +356,21 @@ class ConFriKaApiClient {
         'sign_language': signLanguage,
       })) as Map<String, dynamic>;
 
+  /// Recognize a whole-word ASL sign from a burst of *holistic* landmarks.
+  /// [frames] = list of frames; each `{face:[{x,y,z}...], pose:[...],
+  /// left_hand:[...], right_hand:[...]}` (missing parts omitted/empty).
+  /// Returns `{token, label, confidence, stable, kind:'word', candidates, beta}`.
+  Future<Map<String, dynamic>> recognizeSignWord({
+    required List<Map<String, dynamic>> frames,
+    String signLanguage = 'ASL',
+    int topK = 3,
+  }) async =>
+      (await _post('/api/v1/sign/recognize-word', {
+        'frames': frames,
+        'sign_language': signLanguage,
+        'top_k': topK,
+      })) as Map<String, dynamic>;
+
   // ── Contacts ──────────────────────────────────────────────────────────
   Future<List<dynamic>> contacts() async =>
       (await _get('/api/v1/contacts')) as List<dynamic>;

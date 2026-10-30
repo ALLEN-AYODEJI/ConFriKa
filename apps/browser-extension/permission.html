@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConFriKa Sign — allow camera</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #0e1726; color: #eef3fb;
+         display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+  main { max-width: 340px; padding: 24px; text-align: center; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  p { color: #b7c3d6; margin: 0 0 16px; }
+  .ok { color: #46d39a; font-weight: 600; }
+  .err { color: #ff7a7a; }
+  button { font: inherit; padding: 10px 18px; border: 0; border-radius: 10px;
+           background: #2f80ed; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Allow camera for ConFriKa Sign</h1>
+  <p id="msg">Click “Allow” when Chrome asks, so your signing can be read from the camera. You only need to do this once.</p>
+  <button id="grant">Allow camera</button>
+</main>
+<script src="permission.js"></script>
+</body>
+</html>

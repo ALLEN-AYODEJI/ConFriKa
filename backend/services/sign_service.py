@@ -22,17 +22,32 @@ Design notes / honesty:
     ``SignRecognizer`` interface below is the seam where a learned TFLite/cloud
     model can be dropped in later as a labelled "beta" mode — exactly the
     stub→live pattern used for NLLB and the voice service.
+  * That seam is now filled for **whole-word** ASL signs: ``WordSignRecognizer``
+    runs a trained TFLite model (the 1st-place Google "Isolated Sign Language
+    Recognition" solution, 250 everyday signs) over a burst of *holistic*
+    landmarks (face + pose + both hands). Unlike fingerspelling, a word sign is
+    defined by *motion over time*, so the whole burst is fed as one sequence.
+    This stays labelled **beta** — it is a fixed 250-sign vocabulary, not open
+    translation, and accuracy varies with signer, framing and lighting.
 
-No third-party dependency is added: the geometry is pure Python/stdlib ``math``.
+The geometric fingerspelling path adds no third-party dependency (pure stdlib
+``math``). The word path needs ``numpy`` (already a dep) + ``ai-edge-litert``
+(optional: if it or the model is missing, the word endpoint degrades to a
+labelled "unavailable" response instead of crashing the service).
 """
 from __future__ import annotations
 
+import json
 import math
+import os
+import threading
 from abc import ABC, abstractmethod
 from collections import Counter
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+from ..config.settings import settings
 
 # ── MediaPipe Hands landmark indices ────────────────────────────────────────
 _WRIST = 0
@@ -63,6 +78,29 @@ class RecognizeRequest(BaseModel):
     frames: List[SignFrame] = Field(..., min_length=1, max_length=180)
     sign_language: str = "ASL"
     alphabet: str = "letters"  # 'letters' | 'digits'
+
+
+class HolisticFrame(BaseModel):
+    """One frame of MediaPipe *Holistic* landmarks for whole-word recognition.
+
+    Any part the camera didn't see is left empty; the recognizer fills those
+    rows with NaN, which is exactly what the trained model expects (it masks
+    missing landmarks internally). Clients send normalized coordinates straight
+    from MediaPipe. Face should be the 468-point mesh (drop the 10 iris points
+    some newer MediaPipe builds append)."""
+
+    face: List[Landmark] = Field(default_factory=list)        # up to 468
+    pose: List[Landmark] = Field(default_factory=list)        # up to 33
+    left_hand: List[Landmark] = Field(default_factory=list)   # up to 21
+    right_hand: List[Landmark] = Field(default_factory=list)  # up to 21
+
+
+class RecognizeWordRequest(BaseModel):
+    # A full sign (~1–3s of video). A word sign is defined by motion, so the
+    # whole burst is classified as one sequence rather than voted frame-by-frame.
+    frames: List[HolisticFrame] = Field(..., min_length=1, max_length=512)
+    sign_language: str = "ASL"
+    top_k: int = 4
 
 
 class Candidate(BaseModel):
@@ -243,3 +281,164 @@ _recognizer: SignRecognizer = GeometricAslRecognizer()
 
 def recognize(req: RecognizeRequest) -> RecognizeResponse:
     return _recognizer.recognize(req)
+
+
+# ── Whole-word recognizer (trained TFLite model) ─────────────────────────────
+# The ASL Signs dataset lays out 543 landmarks per frame in this fixed order;
+# the trained model's input ordering must match it exactly or it reads garbage.
+_FACE_N = 468
+_HAND_N = 21
+_POSE_N = 33
+_ROWS_PER_FRAME = _FACE_N + _HAND_N + _POSE_N + _HAND_N  # 543
+# Row offsets: face, then LEFT hand, then pose, then RIGHT hand.
+_OFF_FACE = 0
+_OFF_LHAND = _FACE_N                       # 468
+_OFF_POSE = _OFF_LHAND + _HAND_N           # 489
+_OFF_RHAND = _OFF_POSE + _POSE_N           # 522
+
+_DEFAULT_WORD_MODEL_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "sign"
+)
+
+
+def _word_model_dir() -> str:
+    configured = getattr(settings, "SIGN_WORD_MODEL_DIR", "") or ""
+    return configured.strip() or _DEFAULT_WORD_MODEL_DIR
+
+
+def _fill_rows(frame_arr, start: int, count: int, landmarks: List[Landmark]) -> None:
+    if not landmarks:
+        return  # leave as NaN — the model masks missing landmarks
+    for j in range(min(count, len(landmarks))):
+        lm = landmarks[j]
+        frame_arr[start + j, 0] = lm.x
+        frame_arr[start + j, 1] = lm.y
+        frame_arr[start + j, 2] = lm.z
+
+
+def _frames_to_tensor(frames: List[HolisticFrame]):
+    """Pack holistic frames into the model's ``[N, 543, 3]`` float32 input.
+
+    Missing landmarks stay NaN (the model's own preprocessing handles that)."""
+    import numpy as np
+
+    arr = np.full((len(frames), _ROWS_PER_FRAME, 3), np.nan, dtype=np.float32)
+    for i, f in enumerate(frames):
+        _fill_rows(arr[i], _OFF_FACE, _FACE_N, f.face)
+        _fill_rows(arr[i], _OFF_LHAND, _HAND_N, f.left_hand)
+        _fill_rows(arr[i], _OFF_POSE, _POSE_N, f.pose)
+        _fill_rows(arr[i], _OFF_RHAND, _HAND_N, f.right_hand)
+    return arr
+
+
+class WordSignRecognizer:
+    """Runs the trained 250-sign ASL TFLite model over a burst of holistic
+    landmarks. Lazy-loads the interpreter on first use; if the runtime or the
+    model file is missing it reports itself unavailable rather than raising, so
+    the fingerspelling path and the rest of the API keep working."""
+
+    def __init__(self, model_dir: Optional[str] = None):
+        self._model_dir = model_dir
+        self._interp = None
+        self._in = None
+        self._out = None
+        self._labels: dict = {}
+        self._load_error: Optional[str] = None
+        self._lock = threading.Lock()  # tflite interpreters are not thread-safe
+
+    def _ensure_loaded(self) -> None:
+        if self._interp is not None or self._load_error is not None:
+            return
+        try:
+            try:
+                from ai_edge_litert.interpreter import Interpreter  # LiteRT
+            except ImportError:  # pragma: no cover - fallback path
+                from tensorflow.lite import Interpreter  # type: ignore
+            model_dir = self._model_dir or _word_model_dir()
+            model_path = os.path.join(model_dir, "model.tflite")
+            labels_path = os.path.join(model_dir, "labels.json")
+            interp = Interpreter(model_path=model_path)
+            self._in = interp.get_input_details()[0]
+            self._out = interp.get_output_details()[0]
+            with open(labels_path, "r", encoding="utf-8") as fh:
+                name_to_idx = json.load(fh)
+            self._labels = {int(idx): name for name, idx in name_to_idx.items()}
+            self._interp = interp
+        except Exception as exc:  # missing dep, missing model, corrupt file …
+            self._load_error = f"{type(exc).__name__}: {exc}"
+
+    @property
+    def available(self) -> bool:
+        self._ensure_loaded()
+        return self._interp is not None
+
+    @property
+    def vocabulary_size(self) -> int:
+        self._ensure_loaded()
+        return len(self._labels)
+
+    def recognize_word(self, req: RecognizeWordRequest) -> RecognizeResponse:
+        if req.sign_language.upper() not in SUPPORTED_SIGN_LANGUAGES:
+            return RecognizeResponse(
+                token=None, label="", confidence=0.0, kind="none", stable=False,
+                candidates=[], sign_language=req.sign_language, beta=True,
+                note=f"{req.sign_language} is not supported yet; only {', '.join(SUPPORTED_SIGN_LANGUAGES)}.",
+            )
+        self._ensure_loaded()
+        if self._interp is None:
+            return RecognizeResponse(
+                token=None, label="", confidence=0.0, kind="none", stable=False,
+                candidates=[], sign_language=req.sign_language, beta=True,
+                note=f"Word-sign model unavailable ({self._load_error}).",
+            )
+
+        import numpy as np
+
+        x = _frames_to_tensor(req.frames)
+        n = int(x.shape[0])
+        with self._lock:
+            self._interp.resize_tensor_input(self._in["index"], [n, _ROWS_PER_FRAME, 3])
+            self._interp.allocate_tensors()
+            self._interp.set_tensor(self._in["index"], x)
+            self._interp.invoke()
+            logits = self._interp.get_tensor(self._out["index"]).reshape(-1).astype("float64")
+
+        # The model emits raw logits — softmax them into a 0–1 confidence.
+        e = np.exp(logits - logits.max())
+        probs = e / e.sum()
+        k = max(1, min(int(req.top_k or 4), 10))
+        order = np.argsort(probs)[::-1][:k]
+        candidates = [
+            Candidate(
+                token=self._labels.get(int(i), str(int(i))),
+                label=self._labels.get(int(i), str(int(i))).replace("_", " "),
+                confidence=round(float(probs[i]), 3),
+                kind="word",
+            )
+            for i in order
+        ]
+        best = candidates[0]
+        # One burst → one sequence classification; treat a dominant top
+        # probability as "stable" so clients can gate auto-speaking on it.
+        stable = best.confidence >= 0.5
+        note = None if stable else "Low confidence — sign again, centered and well-lit."
+        return RecognizeResponse(
+            token=best.token, label=best.label, confidence=best.confidence,
+            kind="word", stable=stable, candidates=candidates,
+            sign_language=req.sign_language, beta=True, note=note,
+        )
+
+
+_word_recognizer = WordSignRecognizer()
+
+
+def recognize_word(req: RecognizeWordRequest) -> RecognizeResponse:
+    return _word_recognizer.recognize_word(req)
+
+
+def word_model_status() -> dict:
+    return {
+        "available": _word_recognizer.available,
+        "vocabulary_size": _word_recognizer.vocabulary_size,
+        "beta": True,
+    }

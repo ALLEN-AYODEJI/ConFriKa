@@ -128,17 +128,23 @@ class _SignComposerState extends State<SignComposer> {
           child: Row(
             children: [
               Expanded(
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _ctrl,
-                  builder: (_, v, __) => Text(
-                    v.text.isEmpty ? 'Compose a message…' : v.text,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: widget.compact ? 15 : 17,
-                      fontWeight: FontWeight.w700,
-                      color: v.text.isEmpty ? Colors.grey : _fg,
-                    ),
+                // Editable: users who can type use the device keyboard; the
+                // on-screen ASL keys and phrase chips append to the same field.
+                child: TextField(
+                  controller: _ctrl,
+                  maxLines: 2,
+                  minLines: 1,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _speak(),
+                  style: TextStyle(
+                    fontSize: widget.compact ? 15 : 17,
+                    fontWeight: FontWeight.w700,
+                    color: _fg,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Type or sign a message…',
                   ),
                 ),
               ),

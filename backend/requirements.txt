@@ -30,6 +30,12 @@ websockets==17.3
 numpy==2.5.4
 scipy==1.18.1
 
+# ── Sign-language whole-word recognizer (trained TFLite, 250 ASL signs) ──
+# Lightweight on-device TFLite runtime (LiteRT). CPU/XNNPACK only — no torch
+# needed for this path. If absent, the /sign/recognize-word endpoint degrades
+# to a labelled "unavailable" response instead of failing.
+ai-edge-litert==2.3.0
+
 # ── Neural machine translation (self-hosted NLLB-200) ───────────────────
 # torch is installed from the CPU wheel index in the Dockerfile; keep the pin
 # identical there so `-r requirements.txt` sees it already satisfied.

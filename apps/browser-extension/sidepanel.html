@@ -19,15 +19,37 @@
 
   <div class="row">
     <button id="camBtn" class="primary">Start camera</button>
-    <div class="seg" id="alpha" title="Fingerspelling alphabet">
-      <button data-a="letters" class="on">ABC</button>
-      <button data-a="digits">123</button>
+    <div class="seg" id="mode" title="What to recognize">
+      <button data-m="spell" class="on">✍️ Fingerspell</button>
+      <button data-m="words">💬 Words·beta</button>
     </div>
     <button id="autoSpeak" class="toggle on" title="Speak each finished word">🔊 Auto-speak</button>
   </div>
 
+  <div class="row">
+    <div class="seg" id="alpha" title="Fingerspelling alphabet">
+      <button data-a="letters" class="on">ABC</button>
+      <button data-a="digits">123</button>
+    </div>
+  </div>
+
+  <div class="voicebar">
+    <span class="lbl2">Voice</span>
+    <div class="seg" id="vfilter" title="Filter available voices">
+      <button data-v="any" class="on">All</button>
+      <button data-v="female">Female</button>
+      <button data-v="male">Male</button>
+      <button data-v="african">African</button>
+    </div>
+    <select id="voiceSel" title="Choose the speaking voice"></select>
+  </div>
+
   <div class="lbl">Your message</div>
   <div class="msg empty" id="msg">Start the camera and sign…</div>
+  <div class="typerow">
+    <input id="typeBox" type="text" placeholder="Or type words to speak…" autocomplete="off" enterkeyhint="send">
+    <button id="typeAdd" title="Add typed text to the message">＋ Add</button>
+  </div>
   <div class="btns">
     <button id="speakBtn" class="ocean">🔊 Speak</button>
     <button id="spaceBtn">␣ Space</button>

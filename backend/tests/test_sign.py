@@ -178,3 +178,109 @@ async def test_vocabulary_lists_phrases_and_languages():
         assert "ASL" in out["sign_languages"]
         assert any(p["token"] == "ILY" and p["auto"] for p in out["phrases"])
         assert {"letters", "digits"} <= set(out["alphabets"])
+        # word-model status is advertised so clients know whole-word mode exists.
+        assert "word_model" in out
+        assert out["word_model"]["beta"] is True
+
+
+# ── Whole-word recognizer (trained TFLite model) ─────────────────────────────
+from backend.services import sign_service  # noqa: E402
+
+_WORD_MODEL_READY = sign_service.word_model_status()["available"]
+_needs_model = pytest.mark.skipif(
+    not _WORD_MODEL_READY,
+    reason="word-sign TFLite model/runtime not installed (ai-edge-litert + models/sign)",
+)
+
+
+def _rand_landmarks(n):
+    import random
+    return [{"x": random.random(), "y": random.random(), "z": random.random()} for _ in range(n)]
+
+
+def _holistic_frames(n=40, with_left=False):
+    """Synthetic holistic frames: face + pose + right hand present, left optional.
+    Random coordinates — enough to exercise the full inference path (we assert on
+    shape/contract, not on which word a random burst happens to produce)."""
+    frames = []
+    for _ in range(n):
+        frames.append({
+            "face": _rand_landmarks(468),
+            "pose": _rand_landmarks(33),
+            "right_hand": _rand_landmarks(21),
+            "left_hand": _rand_landmarks(21) if with_left else [],
+        })
+    return frames
+
+
+@_needs_model
+@pytest.mark.asyncio
+async def test_word_recognize_returns_a_word():
+    app = _app()
+    async with await _client(app) as client:
+        r = await client.post("/api/v1/sign/recognize-word", json={
+            "frames": _holistic_frames(40), "sign_language": "ASL", "top_k": 4,
+        })
+        assert r.status_code == 200, r.text
+        out = r.json()
+        assert out["kind"] == "word"
+        assert out["beta"] is True
+        assert isinstance(out["token"], str) and out["token"]
+        assert 0.0 <= out["confidence"] <= 1.0
+        assert 1 <= len(out["candidates"]) <= 4
+        # candidates are sorted by descending confidence and probabilities valid.
+        confs = [c["confidence"] for c in out["candidates"]]
+        assert confs == sorted(confs, reverse=True)
+        assert all(0.0 <= c <= 1.0 for c in confs)
+
+
+@_needs_model
+@pytest.mark.asyncio
+async def test_word_recognize_handles_single_frame_and_missing_hands():
+    app = _app()
+    async with await _client(app) as client:
+        # One frame, no hands at all (face/pose only) — must not crash.
+        r = await client.post("/api/v1/sign/recognize-word", json={
+            "frames": [{"face": _rand_landmarks(468), "pose": _rand_landmarks(33)}],
+            "sign_language": "ASL",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["kind"] == "word"
+
+
+@_needs_model
+@pytest.mark.asyncio
+async def test_word_recognize_unsupported_language_is_beta():
+    app = _app()
+    async with await _client(app) as client:
+        r = await client.post("/api/v1/sign/recognize-word", json={
+            "frames": _holistic_frames(5), "sign_language": "BSL",
+        })
+        assert r.status_code == 200, r.text
+        out = r.json()
+        assert out["beta"] is True
+        assert out["token"] is None
+
+
+def test_frames_to_tensor_layout_and_nan_masking():
+    """The 543-row layout (face, left-hand, pose, right-hand) and NaN masking of
+    missing parts is the contract the model depends on — guard it directly."""
+    import numpy as np
+    from backend.services.sign_service import (
+        HolisticFrame, Landmark, _frames_to_tensor,
+        _OFF_FACE, _OFF_LHAND, _OFF_POSE, _OFF_RHAND, _ROWS_PER_FRAME,
+    )
+    f = HolisticFrame(
+        face=[Landmark(x=0.1, y=0.2, z=0.3) for _ in range(468)],
+        pose=[Landmark(x=0.4, y=0.5, z=0.6) for _ in range(33)],
+        right_hand=[Landmark(x=0.7, y=0.8, z=0.9) for _ in range(21)],
+        left_hand=[],  # missing on purpose
+    )
+    t = _frames_to_tensor([f])
+    assert t.shape == (1, _ROWS_PER_FRAME, 3)
+    assert np.isfinite(t[0, _OFF_FACE:_OFF_FACE + 468]).all()
+    assert np.isfinite(t[0, _OFF_POSE:_OFF_POSE + 33]).all()
+    assert np.isfinite(t[0, _OFF_RHAND:_OFF_RHAND + 21]).all()
+    assert np.isnan(t[0, _OFF_LHAND:_OFF_LHAND + 21]).all()  # left hand => NaN
+    assert t[0, _OFF_FACE, 0] == np.float32(0.1)
+    assert t[0, _OFF_RHAND, 2] == np.float32(0.9)

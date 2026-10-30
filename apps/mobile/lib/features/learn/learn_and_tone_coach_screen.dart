@@ -408,14 +408,19 @@ class _TonePracticeCardState extends State<_TonePracticeCard> {
           encoder: AudioEncoder.pcm16bits,
           sampleRate: 16000,
           numChannels: 1,
-          // Use the device's voice DSP so users don't have to shout and
-          // background noise is filtered: automatic gain control, noise
-          // suppression, and echo cancellation.
+          // Pitch coaching needs a clean, well-levelled voice signal. Use the
+          // speech-tuned VOICE_RECOGNITION source (minimal, pitch-preserving
+          // processing) with automatic gain so quiet speakers don't have to
+          // shout, plus light noise suppression. Echo cancellation is OFF on
+          // purpose: there is no playback to cancel, and the AEC path gates /
+          // attenuates the mic on many devices (the "won't pick up my voice"
+          // symptom). VOICE_COMMUNICATION (half-duplex call DSP) is avoided for
+          // the same reason.
           autoGain: true,
           noiseSuppress: true,
-          echoCancel: true,
+          echoCancel: false,
           androidConfig: AndroidRecordConfig(
-            audioSource: AndroidAudioSource.voiceCommunication,
+            audioSource: AndroidAudioSource.voiceRecognition,
           ),
         ),
       );
@@ -905,7 +910,16 @@ class _TeachWordSheetState extends State<_TeachWordSheet> {
     _voiced.clear();
     _tracker = _PitchTracker(ConFriKaSession.instance.f0BaselineHz);
     final stream = await _recorder.startStream(const RecordConfig(
-        encoder: AudioEncoder.pcm16bits, sampleRate: 16000, numChannels: 1));
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+        // Same clean, pitch-preserving capture as the practice card so the
+        // native pronunciation is recorded clearly (see note in _start()).
+        autoGain: true,
+        noiseSuppress: true,
+        echoCancel: false,
+        androidConfig:
+            AndroidRecordConfig(audioSource: AndroidAudioSource.voiceRecognition)));
     setState(() {
       _recording = true;
       _error = null;

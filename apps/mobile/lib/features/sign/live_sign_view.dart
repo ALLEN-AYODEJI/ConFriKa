@@ -1,19 +1,28 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../core/network/api_client.dart';
+
 /// Live-camera sign recognition for mobile.
 ///
-/// Runs MediaPipe Hands + the same geometric recognizer the backend and the
-/// browser extension use, inside an in-app WebView. The page is served over the
-/// WebView's localhost server (a secure context, which `getUserMedia` requires)
-/// and the MediaPipe runtime is loaded from a CDN. Recognized whole words are
-/// posted back to Flutter via a JS handler so the app can speak them.
+/// Runs MediaPipe inside an in-app WebView served over the WebView's localhost
+/// server (a secure context, which `getUserMedia` requires). Two modes:
+///   • `spell` — MediaPipe Hands + the geometric fingerspelling recognizer,
+///     entirely on-device; finished words are posted straight to Flutter.
+///   • `words` — MediaPipe Holistic (face + pose + both hands). A whole sign's
+///     landmark burst is posted to Flutter, which calls the backend's trained
+///     250-sign model and pushes the recognized word back into the page.
 class LiveSignView extends StatefulWidget {
   final ValueChanged<String> onWord;
   final ValueChanged<String>? onToken;
   final ValueChanged<String>? onError;
   final VoidCallback? onReady;
+
+  /// 'spell' (fingerspelling) or 'words' (trained whole-word model).
+  final String mode;
 
   const LiveSignView({
     super.key,
@@ -21,6 +30,7 @@ class LiveSignView extends StatefulWidget {
     this.onToken,
     this.onError,
     this.onReady,
+    this.mode = 'spell',
   });
 
   @override
@@ -34,6 +44,7 @@ class _LiveSignViewState extends State<LiveSignView> {
   static bool _started = false;
 
   Future<void>? _init;
+  InAppWebViewController? _controller;
 
   @override
   void initState() {
@@ -49,6 +60,49 @@ class _LiveSignViewState extends State<LiveSignView> {
     }
   }
 
+  WebUri get _url => WebUri(
+      'http://localhost:8080/assets/sign/live_sign.html?mode=${widget.mode}');
+
+  @override
+  void didUpdateWidget(covariant LiveSignView old) {
+    super.didUpdateWidget(old);
+    // Switching mode needs a different MediaPipe model → reload the page.
+    if (old.mode != widget.mode) {
+      _controller?.loadUrl(urlRequest: URLRequest(url: _url));
+    }
+  }
+
+  Future<void> _onFrames(dynamic value) async {
+    if (value is! String || value.isEmpty) return;
+    List<Map<String, dynamic>> frames;
+    try {
+      final decoded = jsonDecode(value) as List;
+      frames = decoded.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return;
+    }
+    if (frames.isEmpty) return;
+    try {
+      final out = await ConFriKaApiClient.instance.recognizeSignWord(frames: frames);
+      final label = (out['label'] ?? '').toString();
+      final token = (out['token'])?.toString();
+      final stable = out['stable'] == true;
+      final note = (out['note'] ?? '').toString();
+      // Push the outcome back into the page's overlay.
+      await _controller?.evaluateJavascript(source:
+          'window.cfResult && window.cfResult(${jsonEncode(label)}, $stable, ${jsonEncode(note)});');
+      if (stable && token != null && token.isNotEmpty) {
+        widget.onWord(label.isNotEmpty ? label : token);
+      } else {
+        widget.onToken?.call(note.isNotEmpty ? note : 'Not sure — sign again.');
+      }
+    } catch (e) {
+      await _controller?.evaluateJavascript(source:
+          'window.cfResult && window.cfResult("", false, ${jsonEncode('Could not reach the recognizer.')});');
+      widget.onError?.call('Could not reach the sign recognizer.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<void>(
@@ -61,9 +115,7 @@ class _LiveSignViewState extends State<LiveSignView> {
           );
         }
         return InAppWebView(
-          initialUrlRequest: URLRequest(
-            url: WebUri('http://localhost:8080/assets/sign/live_sign.html'),
-          ),
+          initialUrlRequest: URLRequest(url: _url),
           initialSettings: InAppWebViewSettings(
             mediaPlaybackRequiresUserGesture: false,
             allowsInlineMediaPlayback: true,
@@ -71,6 +123,7 @@ class _LiveSignViewState extends State<LiveSignView> {
             transparentBackground: true,
           ),
           onWebViewCreated: (controller) {
+            _controller = controller;
             controller.addJavaScriptHandler(
               handlerName: 'sign',
               callback: (args) {
@@ -82,6 +135,9 @@ class _LiveSignViewState extends State<LiveSignView> {
                 switch (type) {
                   case 'word':
                     if (value is String && value.trim().isNotEmpty) widget.onWord(value);
+                    break;
+                  case 'frames':
+                    _onFrames(value);
                     break;
                   case 'token':
                     if (value is String) widget.onToken?.call(value);
@@ -98,7 +154,6 @@ class _LiveSignViewState extends State<LiveSignView> {
             );
           },
           onPermissionRequest: (controller, request) async {
-            // Grant the page the camera (OS runtime permission was requested above).
             return PermissionResponse(
               resources: request.resources,
               action: PermissionResponseAction.GRANT,

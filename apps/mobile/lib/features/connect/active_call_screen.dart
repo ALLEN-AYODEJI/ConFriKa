@@ -157,6 +157,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       if (!mounted) return;
       if (s == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _wasConnected = true;
+        _stopRingback();
         setState(() => _phase = CallPhase.connected);
         _startTimer();
       } else if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
@@ -166,18 +167,42 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     };
   }
 
+  // Ringback (dialing tone) heard by the *caller* while the call connects/rings.
+  // This is our own looped tone — not the loud native CallKit ringtone, which is
+  // the incoming-call sound and is still suppressed above.
+  bool _ringbackOn = false;
+  Future<void> _startRingback() async {
+    if (_ringbackOn) return;
+    _ringbackOn = true;
+    try {
+      await _player.setReleaseMode(ReleaseMode.loop);
+      await _player.play(AssetSource('sounds/ringback.wav'), volume: 0.6);
+    } catch (_) {}
+  }
+
+  Future<void> _stopRingback() async {
+    if (!_ringbackOn) return;
+    _ringbackOn = false;
+    try {
+      await _player.stop();
+      await _player.setReleaseMode(ReleaseMode.release);
+    } catch (_) {}
+  }
+
   Future<void> _startOutgoing() async {
     if (!await _ensureMic()) return;
-    // The caller must never hear a ring: clear any stray native CallKit screen
-    // (e.g. a self-delivered call push on the same device) so no system
-    // ringtone plays on our end while we dial out.
+    // Suppress only the loud native CallKit incoming-ringtone (e.g. a
+    // self-delivered call push on the same device). Our own ringback dialing
+    // tone, started below, is what the caller should hear while dialing out.
     try {
       await ConFriKaCallKitService().endAllCalls();
     } catch (_) {}
+    await _startRingback();
     try {
       final session = await _api.initiateCall(_peer);
       _sessionId = session['session_id'] as String?;
       if (session['status'] == 'coming_soon') {
+        await _stopRingback();
         setState(() {
           _phase = CallPhase.failed;
           _error = session['message']?.toString() ?? 'Not available.';
@@ -195,11 +220,13 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             _phase = calleeOnline ? CallPhase.ringing : CallPhase.dialing);
       }
     } on ApiException catch (e) {
+      await _stopRingback();
       setState(() {
         _phase = CallPhase.failed;
         _error = e.message;
       });
     } catch (e) {
+      await _stopRingback();
       setState(() {
         _phase = CallPhase.failed;
         _error = 'Call failed. Please try again.';
@@ -277,6 +304,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
 
   void _finish(String _) {
     _tick?.cancel();
+    _stopRingback();
     // Record the outcome for call history (outgoing calls carry the session id).
     if (_sessionId != null && !_outcomeSent) {
       _outcomeSent = true;

@@ -7,6 +7,8 @@ set -euo pipefail
 VER="0.10.18"
 BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VER}"
 MODEL="https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+# Holistic model (face + pose + both hands) powers whole-word sign recognition.
+HOLISTIC="https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
@@ -23,5 +25,8 @@ done
 
 echo "→ hand_landmarker.task (model)"
 curl -fL "$MODEL" -o vendor/hand_landmarker.task
+
+echo "→ holistic_landmarker.task (model — whole-word signs)"
+curl -fL "$HOLISTIC" -o vendor/holistic_landmarker.task
 
 echo "✅ Vendor assets ready in $DIR/vendor"
